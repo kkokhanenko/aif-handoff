@@ -18,6 +18,9 @@ vi.mock("@aif/shared", async (importOriginal) => {
   return { ...actual, getEnv: vi.fn() };
 });
 
+const { claimCoordinatorTaskIfEligible, releaseTaskClaim, withTaskAttempt } =
+  await import("@aif/data");
+
 const { getEnv } = await import("@aif/shared");
 const mockedGetEnv = vi.mocked(getEnv);
 
@@ -165,6 +168,34 @@ describe("hooks - activity logging", () => {
           ACTIVITY_LOG_QUEUE_LIMIT: 10,
         }),
       );
+    });
+
+    it("drops buffered activity from an old attempt while retaining the newer attempt's entries", () => {
+      const claim = () => {
+        const row = claimCoordinatorTaskIfEligible({
+          taskId: TASK_ID,
+          expectedProjectId: PROJECT_ID,
+          expectedStatus: "planning",
+          coordinatorId: "coordinator",
+          lockDurationMs: 60_000,
+        })!;
+        return {
+          taskId: row.id,
+          attemptId: row.stageAttemptId!,
+          coordinatorId: row.lockedBy!,
+          ownershipRevision: row.ownershipRevision,
+        };
+      };
+      testDb.current.update(tasks).set({ status: "planning" }).where(eq(tasks.id, TASK_ID)).run();
+      const old = claim();
+      withTaskAttempt(old, () => logActivity(TASK_ID, "Agent", "obsolete buffered activity"));
+      releaseTaskClaim(TASK_ID, old.coordinatorId, old.attemptId);
+      const current = claim();
+      withTaskAttempt(current, () => logActivity(TASK_ID, "Agent", "current buffered activity"));
+      // Shutdown can flush outside either attempt. Entries retain their own ownership.
+      flushAllActivityQueues();
+      expect(getTaskLog()).not.toContain("obsolete buffered activity");
+      expect(getTaskLog()).toContain("current buffered activity");
     });
 
     it("does not write to DB until batch size is reached", () => {

@@ -58,7 +58,8 @@ export function releaseDueBlockedTasks(): void {
         blockedReason: null,
         blockedFromStatus: null,
         retryAfter: null,
-        retryCount: 0,
+        // Keep the budget until the retried stage actually succeeds.
+        retryCount: task.retryCount,
       },
       actor: WATCHDOG_ACTOR,
       action: "task.watchdog_released",

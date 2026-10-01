@@ -1,3 +1,4 @@
+import { assertTaskAttemptCurrent, acceptTaskAttemptHandoff } from "./taskAttempts.js";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   auditEvents,
@@ -235,7 +236,8 @@ export function handoffTaskExecution(
   );
 
   try {
-    return db.transaction((tx) => {
+    const result = db.transaction((tx) => {
+      assertTaskAttemptCurrent(input.taskId);
       const task = tx.select().from(tasks).where(eq(tasks.id, input.taskId)).get();
       if (!task) {
         log.warn({ taskId: input.taskId, code: "not_found" }, "Task handoff rejected");
@@ -385,6 +387,7 @@ export function handoffTaskExecution(
         .update(tasks)
         .set({
           executionOwner: input.executionOwner,
+          stageStartedAt: null,
           ownershipRevision: sql`${tasks.ownershipRevision} + 1`,
           ...(task.executionOwner === "human" &&
           input.executionOwner === "ai" &&
@@ -559,6 +562,8 @@ export function handoffTaskExecution(
         history: toHistoryEntry(historyRow),
       } as const;
     });
+    if (result.ok) acceptTaskAttemptHandoff(input.taskId, result.ownership.ownershipRevision);
+    return result;
   } catch (error) {
     log.error(
       {

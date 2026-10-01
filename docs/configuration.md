@@ -457,8 +457,9 @@ The coordinator includes a stale-stage watchdog:
 - Effective stale baseline uses the freshest of `lastHeartbeatAt` and `updatedAt`.
 - If a task is stale in `planning`, `implementing`, or `review` for longer than `AGENT_STAGE_STALE_TIMEOUT_MS`, it is auto-moved to `blocked_external` with backoff.
 - If stale recovery count reaches `AGENT_STAGE_STALE_MAX_RETRY`, the task stays in `blocked_external` without `retryAfter` (manual intervention required).
-- For stale `implementing` tasks, recovery resumes from `plan_ready` to avoid half-broken implementation continuation.
-- Any valid human/stage transition resets stale-retry debt (`retryCount=0`) and refreshes heartbeat baseline.
+- Only tasks with `stageStartedAt` (an actual claimed execution) are eligible. Tasks waiting for capacity without starting are excluded.
+- Recovery resumes the same stage, including `implementing`.
+- Automatic backoff release preserves retry debt (`retryCount`). Successful stage completion or an explicit human retry resets it; transitions refresh the heartbeat baseline.
 
 ## Auto-Review Convergence
 
@@ -466,7 +467,7 @@ Auto-review persists its latest blocking snapshot on the task (`autoReviewState`
 
 - `full_re_review` keeps the legacy broad loop and remains the default.
 - `closure_first` verifies prior blockers before allowing another autonomous loop.
-- When convergence fails, the task stays in `done` but is marked `manualReviewRequired=true`. Humans then resolve it with the existing `approve_done` or `request_changes` actions.
+- When convergence fails or the iteration limit is reached, the task stays in `review`, execution transfers to a human, and `manualReviewRequired=true`. The API and UI retain that explicit state; a legacy `done` task with the flag also displays a manual-review indicator.
 
 ## Agent Permissions
 
