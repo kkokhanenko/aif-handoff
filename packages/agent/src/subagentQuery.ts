@@ -1107,6 +1107,7 @@ export async function executeSubagentQuery(
 
       try {
         assertAiExecutionOwner(taskId);
+        assertTaskAttemptCurrent(taskId);
         if (warmupSourceSessionId && adapter.forkSession) {
           result = await adapter.forkSession({
             ...runInput,
@@ -1126,6 +1127,8 @@ export async function executeSubagentQuery(
       } catch (err) {
         const stalledByWatchdog = watchdog.didFire;
         watchdog.clear();
+        assertTaskAttemptCurrent(taskId);
+        if (err instanceof SupersededTaskAttemptError) throw err;
         if (stalledByWatchdog && attempt < FIRST_ACTIVITY_MAX_RETRIES) {
           // Agent stalled — kill and retry
           log.info(

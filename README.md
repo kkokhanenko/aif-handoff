@@ -266,10 +266,11 @@ The coordinator polls every 30 seconds and delegates to `.claude/agents/` defini
 ### Fault Tolerance
 
 - Task liveness is tracked with `lastHeartbeatAt`.
-- Only stages with a recorded execution start are eligible for stale recovery; waiting for capacity does not count as a hung execution.
+- Enable `AIF_AGENT_ATTEMPT_RECOVERY_ENABLED` to opt into the recovery safeguards below. Its default `false` retains legacy lock-only claims, age-based stale detection, and retry-debt reset on backoff release.
+- With the rollout enabled, only stages with a recorded execution start are eligible for stale recovery; waiting for capacity does not count as a hung execution.
 - If a started stage (`planning`, `improve`, `implementing`, `review`, `verify`) stops heartbeating longer than timeout, coordinator moves task to `blocked_external` with retry backoff.
-- Retry debt survives automatic backoff release; after max stale retries, the task is quarantined for manual intervention.
-- Each coordinator claim receives a durable attempt ID. Superseded attempts cannot persist results or release a newer claim.
+- With the rollout enabled, retry debt survives automatic backoff release; after max stale retries, the task is quarantined for manual intervention.
+- With the rollout enabled, each coordinator claim receives a durable attempt ID. Superseded attempts cannot persist results or release a newer claim.
 
 All agents are loaded via `settingSources: ["project"]` from `.claude/agents/*.md` — the same agent definitions used by [AI Factory](https://github.com/lee-to/ai-factory).
 

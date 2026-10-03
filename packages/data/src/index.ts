@@ -1,5 +1,6 @@
-import { guardTaskAttemptWrite } from "./taskAttempts.js";
+import { guardTaskAttemptWrite, isTaskAttemptRecoveryEnabled } from "./taskAttempts.js";
 export {
+  isTaskAttemptRecoveryEnabled,
   withTaskAttempt,
   getTaskAttempt,
   isTaskAttemptCurrent,
@@ -2283,10 +2284,14 @@ export function claimCoordinatorTaskIfEligible(
     .set({
       lockedBy: input.coordinatorId,
       lockedUntil,
-      stageAttemptId: crypto.randomUUID(),
-      stageStartedAt: nowIso,
-      lastHeartbeatAt: nowIso,
-      updatedAt: nowIso,
+      ...(isTaskAttemptRecoveryEnabled()
+        ? {
+            stageAttemptId: crypto.randomUUID(),
+            stageStartedAt: nowIso,
+            lastHeartbeatAt: nowIso,
+            updatedAt: nowIso,
+          }
+        : {}),
     })
     .where(and(...conditions))
     .returning()
@@ -2742,7 +2747,7 @@ export function listStaleInProgressTasks(): TaskRow[] {
         inArray(tasks.status, ["planning", "improve", "implementing", "review", "verify"]),
         eq(tasks.executionOwner, "ai"),
         eq(tasks.paused, false),
-        isNotNull(tasks.stageStartedAt),
+        isTaskAttemptRecoveryEnabled() ? isNotNull(tasks.stageStartedAt) : undefined,
         // Skip tasks with active (non-expired) locks — they're being processed
         or(
           sql`${tasks.lockedBy} IS NULL`,

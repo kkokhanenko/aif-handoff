@@ -32,6 +32,14 @@ function createGitRoot(prefix: string): string {
   return createGitTestRoot(prefix, { readme: "# auto queue\n" }).rootPath;
 }
 
+vi.mock("@aif/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@aif/shared")>();
+  return {
+    ...actual,
+    getEnv: () => Object.assign(actual.getEnv(), { AIF_AGENT_ATTEMPT_RECOVERY_ENABLED: true }),
+  };
+});
+
 vi.mock("@aif/shared/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aif/shared/server")>();
   return {

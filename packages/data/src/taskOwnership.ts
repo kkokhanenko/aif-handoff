@@ -1,4 +1,8 @@
-import { assertTaskAttemptCurrent, acceptTaskAttemptHandoff } from "./taskAttempts.js";
+import {
+  assertTaskAttemptCurrent,
+  acceptTaskAttemptHandoff,
+  isTaskAttemptRecoveryEnabled,
+} from "./taskAttempts.js";
 import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   auditEvents,
@@ -387,7 +391,7 @@ export function handoffTaskExecution(
         .update(tasks)
         .set({
           executionOwner: input.executionOwner,
-          stageStartedAt: null,
+          ...(isTaskAttemptRecoveryEnabled() ? { stageStartedAt: null } : {}),
           ownershipRevision: sql`${tasks.ownershipRevision} + 1`,
           ...(task.executionOwner === "human" &&
           input.executionOwner === "ai" &&

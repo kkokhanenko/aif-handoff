@@ -6,6 +6,14 @@ import { claimCoordinatorTaskIfEligible, releaseStaleTaskClaims } from "@aif/dat
 
 const testDb = { current: createTestDb() };
 
+vi.mock("@aif/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@aif/shared")>();
+  return {
+    ...actual,
+    getEnv: () => Object.assign(actual.getEnv(), { AIF_AGENT_ATTEMPT_RECOVERY_ENABLED: true }),
+  };
+});
+
 vi.mock("@aif/shared/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aif/shared/server")>();
   return {

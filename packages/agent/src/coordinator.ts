@@ -10,6 +10,7 @@ import {
   handoffTaskExecution,
   hasActiveLockedTaskForProject,
   claimCoordinatorTaskIfEligible,
+  isTaskAttemptRecoveryEnabled,
   withTaskAttempt,
   assertTaskAttemptCurrent,
   isTaskAttemptCurrent,
@@ -73,6 +74,7 @@ import {
 
 const log = logger("coordinator");
 const env = getEnv();
+const ATTEMPT_RECOVERY_ENABLED = isTaskAttemptRecoveryEnabled();
 const AUTO_QUEUE_COMMIT_GATE_ENABLED = env.AIF_AGENT_AUTO_QUEUE_COMMIT_GATE_ENABLED;
 const STAGE_RUN_TIMEOUT_MS = Math.max(env.AGENT_STAGE_RUN_TIMEOUT_MS, 60_000);
 const CLAIM_LOCK_DURATION_MS = STAGE_RUN_TIMEOUT_MS + 5 * 60 * 1000; // stage timeout + 5 min buffer
@@ -591,7 +593,7 @@ async function processOneTask(task: TaskRow, stage: StatusTransition): Promise<b
   updateTaskStatus(
     task.id,
     stage.inProgress,
-    { stageStartedAt: task.stageStartedAt },
+    ATTEMPT_RECOVERY_ENABLED ? { stageStartedAt: task.stageStartedAt } : {},
     { title: taskTitle, fromStatus: sourceStatus },
   );
 
@@ -1276,7 +1278,7 @@ async function runPollCycle(
                 releaseTaskClaim(
                   taskIdToRelease,
                   COORDINATOR_ID,
-                  claimedTask?.stageAttemptId ?? undefined,
+                  ATTEMPT_RECOVERY_ENABLED ? (claimedTask?.stageAttemptId ?? undefined) : undefined,
                 );
               }
             } catch (err) {
@@ -1336,15 +1338,19 @@ async function runPollCycle(
               "[FIX:149] Task revalidated and claimed for processing",
             );
 
-            const taskPromise = withTaskAttempt(
-              {
-                taskId: executionTask.id,
-                attemptId: executionTask.stageAttemptId!,
-                coordinatorId: COORDINATOR_ID,
-                ownershipRevision: executionTask.ownershipRevision,
-              },
-              () => processOneTask(executionTask, stage),
-            )
+            const execute = () => processOneTask(executionTask, stage);
+            const execution = ATTEMPT_RECOVERY_ENABLED
+              ? withTaskAttempt(
+                  {
+                    taskId: executionTask.id,
+                    attemptId: executionTask.stageAttemptId!,
+                    coordinatorId: COORDINATOR_ID,
+                    ownershipRevision: executionTask.ownershipRevision,
+                  },
+                  execute,
+                )
+              : execute();
+            const taskPromise = execution
               .then((success) => {
                 if (!success) failedInCycle.add(executionTask.id);
               })

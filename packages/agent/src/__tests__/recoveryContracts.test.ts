@@ -5,6 +5,14 @@ import type { RuntimeRunInput, RuntimeRunResult } from "@aif/runtime";
 
 const testDb = { current: createTestDb() };
 const fakeRun = vi.fn<(input: RuntimeRunInput) => Promise<RuntimeRunResult>>();
+vi.mock("@aif/shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@aif/shared")>();
+  return {
+    ...actual,
+    getEnv: () => Object.assign(actual.getEnv(), { AIF_AGENT_ATTEMPT_RECOVERY_ENABLED: true }),
+  };
+});
+
 vi.mock("@aif/shared/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aif/shared/server")>();
   return { ...actual, getDb: () => testDb.current };
@@ -49,6 +57,7 @@ const {
 } = await import("@aif/data");
 const { executeSubagentQuery, setCoordinatorId, startHeartbeat } =
   await import("../subagentQuery.js");
+const { setActiveStageAbortController, abortAllActiveStages } = await import("../stageAbort.js");
 const { recoverStaleInProgressTasks, releaseDueBlockedTasks } = await import("../taskWatchdog.js");
 
 beforeEach(() => {
@@ -74,6 +83,7 @@ beforeEach(() => {
   setCoordinatorId("fake-coordinator");
 });
 afterEach(() => {
+  abortAllActiveStages();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -170,4 +180,41 @@ describe("runtime recovery contracts", () => {
     );
     clearInterval(timer);
   });
+});
+
+it("does not restart a superseded runtime after its first-activity timeout and late success", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+  let finishOld!: (result: RuntimeRunResult) => void;
+  let started!: () => void;
+  const oldStarted = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  fakeRun
+    .mockImplementationOnce(async () => {
+      started();
+      return new Promise((resolve) => {
+        finishOld = resolve;
+      });
+    })
+    .mockResolvedValue({ outputText: "unwanted retry", usage: null });
+  const old = claim();
+  const oldController = new AbortController();
+  const oldOutcome = withTaskAttempt(old, () => {
+    setActiveStageAbortController("task", oldController);
+    return run().catch((error: unknown) => error);
+  });
+  await oldStarted;
+  await vi.advanceTimersByTimeAsync(getEnv().AGENT_FIRST_ACTIVITY_TIMEOUT_MS + 1);
+  expect(fakeRun.mock.calls[0][0].execution?.abortController?.signal.aborted).toBe(true);
+  releaseTaskClaim("task", old.coordinatorId, old.attemptId);
+  const current = claim();
+  const currentController = new AbortController();
+  withTaskAttempt(current, () => setActiveStageAbortController("task", currentController));
+  const beforeLateResult = findTaskById("task");
+  finishOld({ outputText: "late old result", usage: null });
+  expect(await oldOutcome).toBeInstanceOf(SupersededTaskAttemptError);
+  expect(fakeRun).toHaveBeenCalledTimes(1);
+  expect(currentController.signal.aborted).toBe(false);
+  expect(findTaskById("task")).toEqual(beforeLateResult);
 });

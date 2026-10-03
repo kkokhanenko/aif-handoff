@@ -15,7 +15,10 @@ vi.mock("@aif/shared/server", async (importOriginal) => {
 
 vi.mock("@aif/shared", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@aif/shared")>();
-  return { ...actual, getEnv: vi.fn() };
+  return {
+    ...actual,
+    getEnv: vi.fn(() => ({ ...actual.getEnv(), AIF_AGENT_ATTEMPT_RECOVERY_ENABLED: true })),
+  };
 });
 
 const { claimCoordinatorTaskIfEligible, releaseTaskClaim, withTaskAttempt } =
@@ -82,6 +85,7 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
     AIF_USAGE_LIMITS_ENABLED: false,
     AIF_AGENT_AUTO_QUEUE_COMMIT_GATE_ENABLED: false,
     AIF_AGENT_OVERLAPPING_POLL_CYCLES_ENABLED: false,
+    AIF_AGENT_ATTEMPT_RECOVERY_ENABLED: true,
     AIF_GITHUB_PROJECT_CLONE_ENABLED: false,
     AIF_GITHUB_ISSUE_PR_ENABLED: false,
     AIF_STAGE_RUNTIME_PIN_ENABLED: false,

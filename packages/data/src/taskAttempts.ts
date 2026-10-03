@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq } from "drizzle-orm";
-import { tasks } from "@aif/shared";
+import { tasks, getEnv } from "@aif/shared";
 import { getDb } from "@aif/shared/server";
 
 export interface TaskAttempt {
@@ -11,6 +11,12 @@ export interface TaskAttempt {
 }
 
 const attempts = new AsyncLocalStorage<TaskAttempt>();
+const ATTEMPT_RECOVERY_ENABLED = getEnv().AIF_AGENT_ATTEMPT_RECOVERY_ENABLED;
+
+/** Resolve rollout once at initialization, consistently for all repository consumers. */
+export function isTaskAttemptRecoveryEnabled(): boolean {
+  return ATTEMPT_RECOVERY_ENABLED;
+}
 
 export class SupersededTaskAttemptError extends Error {
   constructor(readonly taskId: string) {
@@ -55,10 +61,13 @@ export function assertTaskAttemptCurrent(taskId: string): void {
 /** Validate and write in one synchronous SQLite transaction, including across processes. */
 export function guardTaskAttemptWrite<T>(taskId: string, write: () => T): T {
   if (!attempts.getStore()) return write();
-  return getDb().transaction(() => {
-    assertTaskAttemptCurrent(taskId);
-    return write();
-  });
+  return getDb().transaction(
+    () => {
+      assertTaskAttemptCurrent(taskId);
+      return write();
+    },
+    { behavior: "immediate" },
+  );
 }
 
 /** A successful handoff by this attempt may finish persisting its manual-review outcome. */

@@ -1,4 +1,4 @@
-import { assertTaskAttemptCurrent } from "./taskAttempts.js";
+import { assertTaskAttemptCurrent, isTaskAttemptRecoveryEnabled } from "./taskAttempts.js";
 import { and, asc, eq } from "drizzle-orm";
 import {
   auditEvents,
@@ -229,7 +229,9 @@ export function transitionTaskStatus(
       const updated = tx
         .update(tasks)
         .set({
-          ...(task.status !== input.status ? { stageStartedAt: null } : {}),
+          ...(isTaskAttemptRecoveryEnabled() && task.status !== input.status
+            ? { stageStartedAt: null }
+            : {}),
           ...normalizeExtra(input.extra ?? {}),
           status: input.status,
           sessionId: null,
@@ -358,10 +360,14 @@ export function applyTaskAction(input: ApplyTaskActionInput): TaskTransitionResu
         .set({
           ...normalizeExtra(input.extra ?? {}),
           ...normalizeExtra(resolution.patch),
-          stageStartedAt: null,
-          stageAttemptId: null,
-          lockedBy: null,
-          lockedUntil: null,
+          ...(isTaskAttemptRecoveryEnabled()
+            ? {
+                stageStartedAt: null,
+                stageAttemptId: null,
+                lockedBy: null,
+                lockedUntil: null,
+              }
+            : {}),
           status: resolution.patch.status,
           sessionId: null,
           ...(input.event === "retry_from_blocked"

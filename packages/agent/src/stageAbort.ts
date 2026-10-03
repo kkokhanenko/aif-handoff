@@ -10,7 +10,7 @@ const _activeAborts = new Map<string, { abort: AbortController; attemptId?: stri
 export function setActiveStageAbortController(taskId: string, abort: AbortController | null): void {
   if (abort) {
     const previous = _activeAborts.get(taskId);
-    if (previous && previous.abort !== abort) previous.abort.abort();
+    if (getTaskAttempt() && previous && previous.abort !== abort) previous.abort.abort();
     _activeAborts.set(taskId, { abort, attemptId: getTaskAttempt()?.attemptId });
   } else {
     if (_activeAborts.get(taskId)?.attemptId === getTaskAttempt()?.attemptId)
