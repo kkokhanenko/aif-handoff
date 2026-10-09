@@ -192,7 +192,7 @@ describe("AddTaskForm", () => {
   });
 
   it("resets and closes form on cancel", () => {
-    const { container } = render(<AddTaskForm projectId="p-1" />);
+    render(<AddTaskForm projectId="p-1" />);
 
     fireEvent.click(screen.getByText("Add task"));
     fireEvent.change(screen.getByPlaceholderText("Task title"), {
@@ -202,12 +202,36 @@ describe("AddTaskForm", () => {
       target: { value: "Temp text" },
     });
 
-    const buttons = container.querySelectorAll('button[type="button"]');
-    const cancelButton = buttons[buttons.length - 1] as HTMLButtonElement;
-    fireEvent.click(cancelButton);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel task creation" }));
 
     expect(screen.getByText("Add task")).toBeDefined();
     expect(screen.queryByPlaceholderText("Task title")).toBeNull();
+  });
+
+  it("opens task creation in a separate sheet", () => {
+    render(<AddTaskForm projectId="p-1" />);
+
+    expect(screen.queryByLabelText("Create task")).toBeNull();
+    fireEvent.click(screen.getByText("Add task"));
+
+    const sheet = screen.getByLabelText("Create task");
+    expect(sheet.className).toContain("md:w-[42rem]");
+    expect(screen.getByRole("heading", { name: "Create task" })).toBeDefined();
+    expect(screen.getByPlaceholderText("Task title")).toBeDefined();
+  });
+
+  it("closes the sheet with Escape and preserves the draft", () => {
+    render(<AddTaskForm projectId="p-1" />);
+    fireEvent.click(screen.getByText("Add task"));
+    fireEvent.change(screen.getByPlaceholderText("Task title"), {
+      target: { value: "Draft task" },
+    });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByPlaceholderText("Task title")).toBeNull();
+
+    fireEvent.click(screen.getByText("Add task"));
+    expect(screen.getByDisplayValue("Draft task")).toBeDefined();
   });
 
   it("runs submit onSuccess callback and closes form", async () => {
@@ -730,10 +754,7 @@ describe("AddTaskForm", () => {
       fireEvent.click(screen.getByText("None"));
       fireEvent.click(screen.getByText("Critical"));
       // Dismiss with the X button
-      const xButtons = screen.getAllByRole("button");
-      const xClose = xButtons.find((b) => b.querySelector("svg.lucide-x"));
-      expect(xClose).toBeDefined();
-      fireEvent.click(xClose!);
+      fireEvent.click(screen.getByRole("button", { name: "Cancel task creation" }));
       // Reopen — priority must be back to None
       fireEvent.click(screen.getByText("Add task"));
       expect(screen.getByText("None")).toBeDefined();

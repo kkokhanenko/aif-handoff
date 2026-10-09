@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Radio } from "@/components/ui/radio";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useCreateTask } from "@/hooks/useTasks";
-import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { useProjects } from "@/hooks/useProjects";
 import { useSettings, useProjectDefaults, useQaPipelineEnabled } from "@/hooks/useSettings";
 import { useRuntimeProfiles, useRuntimes } from "@/hooks/useRuntimeProfiles";
@@ -152,9 +152,9 @@ export function AddTaskForm({ projectId }: Props) {
     return () => window.removeEventListener("task:create", openForm);
   }, [openForm]);
 
-  // Close form on Escape key
+  // Sheet owns Escape/overlay handling. Closing the panel keeps the draft;
+  // the explicit Cancel action below resets it.
   const closeForm = useCallback(() => setIsOpen(false), []);
-  useKeyboardShortcut({ key: "Escape", enabled: isOpen }, closeForm);
 
   // Auto-update planPath when title or mode changes (unless user manually edited the field).
   // Called from onChange handlers rather than useEffect to avoid cascading renders.
@@ -229,8 +229,8 @@ export function AddTaskForm({ projectId }: Props) {
     );
   };
 
-  if (!isOpen) {
-    return (
+  return (
+    <>
       <Button
         variant="ghost"
         size="sm"
@@ -242,303 +242,329 @@ export function AddTaskForm({ projectId }: Props) {
         Add task
         <span className="ml-auto font-mono text-3xs text-muted-foreground">Ctrl+N</span>
       </Button>
-    );
-  }
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-2 border border-border bg-background/65 p-2.5">
-      <Input
-        placeholder="Task title"
-        value={title}
-        onChange={(e) => handleTitleChange(e.target.value)}
-        autoFocus
-      />
-      <Textarea
-        placeholder="Description (optional)"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-      />
-      <div className="space-y-2 border border-border/60 bg-muted/20 p-2">
-        <div className="space-y-1">
-          <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Task type
-          </p>
-          <label className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Radio
-              name="taskType"
-              aria-label="Standard"
-              checked={!isFix}
-              onChange={() => setIsFix(false)}
-              className="mt-0.5 h-3.5 w-3.5"
-            />
-            <span>
-              <span className="font-medium text-foreground">Standard</span>
-              {" - Default task flow."}
-            </span>
-          </label>
-          <label className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Radio
-              name="taskType"
-              aria-label="Fix"
-              checked={isFix}
-              onChange={() => setIsFix(true)}
-              className="mt-0.5 h-3.5 w-3.5"
-            />
-            <span>
-              <span className="font-medium text-foreground">Fix</span>
-              {
-                " - Use when something is not working correctly or is broken; a patch will be created for the self-learning system."
-              }
-            </span>
-          </label>
-        </div>
-        {isParticipantsMode && (
-          <OwnershipFields
-            executionOwner={executionOwner}
-            assigneeIds={assigneeIds}
-            participants={assignableParticipants}
-            onExecutionOwnerChange={setExecutionOwner}
-            onAssigneeIdsChange={setAssigneeIds}
-            allowMultiple={isAdmin}
-          />
-        )}
-        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Checkbox
-            aria-label="Auto mode"
-            checked={autoMode}
-            onChange={(e) => setAutoMode(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5"
-          />
-          <span>
-            <span className="font-medium text-foreground">Auto mode</span>
-            {
-              " - AI moves tasks between statuses automatically; the user only starts the process and verifies the result."
-            }
-          </span>
-        </label>
-        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Checkbox
-            aria-label="Keep documentation current"
-            checked={planDocs}
-            onChange={(e) => setPlanDocs(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5"
-          />
-          <span>
-            <span className="font-medium text-foreground">Keep documentation current</span>
-            {
-              " - Update affected documentation when needed. Turn off when the task has no documentation impact."
-            }
-          </span>
-        </label>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-foreground">Priority</span>
-          <Select
-            selectSize="sm"
-            value={String(priority)}
-            onChange={(e) => setPriority(Number(e.target.value))}
-            options={[
-              { value: "0", label: "None" },
-              { value: "1", label: "Low" },
-              { value: "2", label: "Medium" },
-              { value: "3", label: "High" },
-              { value: "4", label: "Urgent" },
-              { value: "5", label: "Critical" },
-            ]}
-            className="w-32"
-          />
-        </div>
-      </div>
-      {!isFix && (
-        <div className="space-y-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="gap-1.5 text-muted-foreground"
-          >
-            <Settings2 className="h-3.5 w-3.5" />
-            Planner settings
-          </Button>
-          {showAdvanced && (
-            <PlannerSettings
-              isParallel={isParallel}
-              plannerMode={plannerMode}
-              onModeChange={handleModeChange}
-              planPath={planPath}
-              onPlanPathChange={(v) => {
-                userOverride.current = true;
-                setPlanPath(v);
-              }}
-              effectivePlanPath={effectivePlanPath}
-              defaultPlanPath={defaultPlanPath}
-              planTests={planTests}
-              onPlanTestsChange={setPlanTests}
-            />
-          )}
-        </div>
-      )}
-      <div className="space-y-1">
-        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Checkbox
-            checked={skipReview}
-            onChange={(e) => setSkipReview(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5"
-          />
-          <span>
-            <span className="font-medium text-foreground">Skip review</span>
-            {" - After implementation, move directly to done without code review."}
-          </span>
-        </label>
-        <label className="flex items-start gap-2 text-xs text-muted-foreground">
-          <Checkbox
-            checked={useSubagents}
-            onChange={(e) => {
-              const checked = e.target.checked;
-              setUseSubagents(checked);
-              if (checked) {
-                setRunPlanImprove(false);
-                setRunPostVerify(false);
-              }
-            }}
-            className="mt-0.5 h-3.5 w-3.5"
-          />
-          <span>
-            <span className="font-medium text-foreground">Use subagents</span>
-            {
-              " - Run via custom subagents (plan-coordinator, implement-coordinator, sidecars). Disable to use aif-* skills directly."
-            }
-          </span>
-        </label>
-        {!useSubagents && (
-          <>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox
-                checked={runPlanImprove}
-                onChange={(e) => setRunPlanImprove(e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5"
-              />
-              <span>
-                <span className="font-medium text-foreground">Run improve</span>
-                {" - Refine the generated plan with aif-improve before implementation."}
-              </span>
-            </label>
-            <label className="flex items-start gap-2 text-xs text-muted-foreground">
-              <Checkbox
-                checked={runPostVerify}
-                onChange={(e) => setRunPostVerify(e.target.checked)}
-                className="mt-0.5 h-3.5 w-3.5"
-              />
-              <span>
-                <span className="font-medium text-foreground">Run verify</span>
-                {" - Validate the finished implementation with aif-verify before review."}
-              </span>
-            </label>
-          </>
-        )}
-        {qaPipelineEnabled && (
-          <label className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Checkbox
-              checked={autoQa}
-              onChange={(e) => {
-                setAutoQa(e.target.checked);
-                if (!e.target.checked) setAutoQaCheck(false);
-              }}
-              className="mt-0.5 h-3.5 w-3.5"
-            />
-            <span>
-              <span className="font-medium text-foreground">Run QA after done</span>
-              {
-                " - Automatically generate the QA plan when this task is approved (done → verified)."
-              }
-            </span>
-          </label>
-        )}
-        {qaPipelineEnabled && (
-          <label className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Checkbox
-              checked={autoQaCheck}
-              disabled={!autoQa}
-              onChange={(e) => setAutoQaCheck(e.target.checked)}
-              className="mt-0.5 h-3.5 w-3.5"
-            />
-            <span>
-              <span className="font-medium text-foreground">Run QA Check after QA</span>
-              {
-                " - Execute generated test cases; missing browser automation blocks only browser-dependent cases."
-              }
-            </span>
-          </label>
-        )}
-      </div>
-      <div className="space-y-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setRuntimeOverrideOpen((v) => !v)}
-          className="gap-1.5 text-muted-foreground"
+      <Sheet open={isOpen} onOpenChange={(open) => !open && closeForm()}>
+        <SheetContent
+          aria-label="Create task"
+          className="w-full overflow-hidden p-0 md:w-[42rem] md:max-w-[calc(100vw-2rem)]"
         >
-          <Cpu className="h-3.5 w-3.5" />
-          Runtime override
-        </Button>
-        {runtimeOverrideOpen && (
-          <div className="space-y-2 border border-border/60 bg-muted/20 p-2">
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Runtime profile
+          <div className="flex h-full flex-col">
+            <SheetHeader className="mb-0 border-b border-border px-4 py-4 pr-12">
+              <SheetTitle>Create task</SheetTitle>
+              <p className="text-xs text-muted-foreground">
+                Add a task to Backlog and configure its execution flow.
               </p>
-              <select
-                className="h-7 w-full rounded border border-input bg-background px-2 text-xs"
-                value={runtimeProfileId}
-                onChange={(e) => setRuntimeProfileId(e.target.value)}
-              >
-                <option value="">
-                  {projectTaskRuntimeDefaultId
-                    ? "(project default)"
-                    : "(none — runtime resolved by system defaults)"}
-                </option>
-                {selectableRuntimeProfiles.map((profile) => (
-                  <option key={profile.id} value={profile.id}>
-                    {formatRuntimeProfileOptionLabel(profile)}
-                  </option>
-                ))}
-              </select>
-              {!runtimeProfileId && (
-                <p className="text-[10px] text-muted-foreground">
-                  No override uses {runtimeDefaultDescription}.
-                </p>
-              )}
-            </div>
-            <div className="space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Model override
-              </p>
-              <Input
-                value={modelOverride}
-                onChange={(e) => setModelOverride(e.target.value)}
-                placeholder="runtime default"
-                className="h-7 text-xs"
-              />
-            </div>
-            {selectedRuntimeDescriptor &&
-              !selectedRuntimeDescriptor.capabilities.supportsAgentDefinitions && (
-                <p className="text-[10px] text-muted-foreground">
-                  This runtime does not support subagents — skills mode will be used instead.
-                </p>
-              )}
+            </SheetHeader>
+            <SheetClose onClose={closeForm} />
+
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div className="flex-1 space-y-3 overflow-y-auto p-4">
+                <Input
+                  placeholder="Task title"
+                  value={title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  autoFocus
+                />
+                <Textarea
+                  placeholder="Description (optional)"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={2}
+                />
+                <div className="space-y-2 border border-border/60 bg-muted/20 p-2">
+                  <div className="space-y-1">
+                    <p className="text-2xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Task type
+                    </p>
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Radio
+                        name="taskType"
+                        aria-label="Standard"
+                        checked={!isFix}
+                        onChange={() => setIsFix(false)}
+                        className="mt-0.5 h-3.5 w-3.5"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Standard</span>
+                        {" - Default task flow."}
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Radio
+                        name="taskType"
+                        aria-label="Fix"
+                        checked={isFix}
+                        onChange={() => setIsFix(true)}
+                        className="mt-0.5 h-3.5 w-3.5"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Fix</span>
+                        {
+                          " - Use when something is not working correctly or is broken; a patch will be created for the self-learning system."
+                        }
+                      </span>
+                    </label>
+                  </div>
+                  {isParticipantsMode && (
+                    <OwnershipFields
+                      executionOwner={executionOwner}
+                      assigneeIds={assigneeIds}
+                      participants={assignableParticipants}
+                      onExecutionOwnerChange={setExecutionOwner}
+                      onAssigneeIdsChange={setAssigneeIds}
+                      allowMultiple={isAdmin}
+                    />
+                  )}
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      aria-label="Auto mode"
+                      checked={autoMode}
+                      onChange={(e) => setAutoMode(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">Auto mode</span>
+                      {
+                        " - AI moves tasks between statuses automatically; the user only starts the process and verifies the result."
+                      }
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      aria-label="Keep documentation current"
+                      checked={planDocs}
+                      onChange={(e) => setPlanDocs(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">
+                        Keep documentation current
+                      </span>
+                      {
+                        " - Update affected documentation when needed. Turn off when the task has no documentation impact."
+                      }
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-foreground">Priority</span>
+                    <Select
+                      selectSize="sm"
+                      value={String(priority)}
+                      onChange={(e) => setPriority(Number(e.target.value))}
+                      options={[
+                        { value: "0", label: "None" },
+                        { value: "1", label: "Low" },
+                        { value: "2", label: "Medium" },
+                        { value: "3", label: "High" },
+                        { value: "4", label: "Urgent" },
+                        { value: "5", label: "Critical" },
+                      ]}
+                      className="w-32"
+                    />
+                  </div>
+                </div>
+                {!isFix && (
+                  <div className="space-y-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAdvanced((v) => !v)}
+                      className="gap-1.5 text-muted-foreground"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                      Planner settings
+                    </Button>
+                    {showAdvanced && (
+                      <PlannerSettings
+                        isParallel={isParallel}
+                        plannerMode={plannerMode}
+                        onModeChange={handleModeChange}
+                        planPath={planPath}
+                        onPlanPathChange={(v) => {
+                          userOverride.current = true;
+                          setPlanPath(v);
+                        }}
+                        effectivePlanPath={effectivePlanPath}
+                        defaultPlanPath={defaultPlanPath}
+                        planTests={planTests}
+                        onPlanTestsChange={setPlanTests}
+                      />
+                    )}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      checked={skipReview}
+                      onChange={(e) => setSkipReview(e.target.checked)}
+                      className="mt-0.5 h-3.5 w-3.5"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">Skip review</span>
+                      {" - After implementation, move directly to done without code review."}
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                    <Checkbox
+                      checked={useSubagents}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseSubagents(checked);
+                        if (checked) {
+                          setRunPlanImprove(false);
+                          setRunPostVerify(false);
+                        }
+                      }}
+                      className="mt-0.5 h-3.5 w-3.5"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">Use subagents</span>
+                      {
+                        " - Run via custom subagents (plan-coordinator, implement-coordinator, sidecars). Disable to use aif-* skills directly."
+                      }
+                    </span>
+                  </label>
+                  {!useSubagents && (
+                    <>
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={runPlanImprove}
+                          onChange={(e) => setRunPlanImprove(e.target.checked)}
+                          className="mt-0.5 h-3.5 w-3.5"
+                        />
+                        <span>
+                          <span className="font-medium text-foreground">Run improve</span>
+                          {" - Refine the generated plan with aif-improve before implementation."}
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={runPostVerify}
+                          onChange={(e) => setRunPostVerify(e.target.checked)}
+                          className="mt-0.5 h-3.5 w-3.5"
+                        />
+                        <span>
+                          <span className="font-medium text-foreground">Run verify</span>
+                          {" - Validate the finished implementation with aif-verify before review."}
+                        </span>
+                      </label>
+                    </>
+                  )}
+                  {qaPipelineEnabled && (
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={autoQa}
+                        onChange={(e) => {
+                          setAutoQa(e.target.checked);
+                          if (!e.target.checked) setAutoQaCheck(false);
+                        }}
+                        className="mt-0.5 h-3.5 w-3.5"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Run QA after done</span>
+                        {
+                          " - Automatically generate the QA plan when this task is approved (done → verified)."
+                        }
+                      </span>
+                    </label>
+                  )}
+                  {qaPipelineEnabled && (
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Checkbox
+                        checked={autoQaCheck}
+                        disabled={!autoQa}
+                        onChange={(e) => setAutoQaCheck(e.target.checked)}
+                        className="mt-0.5 h-3.5 w-3.5"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Run QA Check after QA</span>
+                        {
+                          " - Execute generated test cases; missing browser automation blocks only browser-dependent cases."
+                        }
+                      </span>
+                    </label>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setRuntimeOverrideOpen((v) => !v)}
+                    className="gap-1.5 text-muted-foreground"
+                  >
+                    <Cpu className="h-3.5 w-3.5" />
+                    Runtime override
+                  </Button>
+                  {runtimeOverrideOpen && (
+                    <div className="space-y-2 border border-border/60 bg-muted/20 p-2">
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Runtime profile
+                        </p>
+                        <select
+                          className="h-7 w-full rounded border border-input bg-background px-2 text-xs"
+                          value={runtimeProfileId}
+                          onChange={(e) => setRuntimeProfileId(e.target.value)}
+                        >
+                          <option value="">
+                            {projectTaskRuntimeDefaultId
+                              ? "(project default)"
+                              : "(none — runtime resolved by system defaults)"}
+                          </option>
+                          {selectableRuntimeProfiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {formatRuntimeProfileOptionLabel(profile)}
+                            </option>
+                          ))}
+                        </select>
+                        {!runtimeProfileId && (
+                          <p className="text-[10px] text-muted-foreground">
+                            No override uses {runtimeDefaultDescription}.
+                          </p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Model override
+                        </p>
+                        <Input
+                          value={modelOverride}
+                          onChange={(e) => setModelOverride(e.target.value)}
+                          placeholder="runtime default"
+                          className="h-7 text-xs"
+                        />
+                      </div>
+                      {selectedRuntimeDescriptor &&
+                        !selectedRuntimeDescriptor.capabilities.supportsAgentDefinitions && (
+                          <p className="text-[10px] text-muted-foreground">
+                            This runtime does not support subagents — skills mode will be used
+                            instead.
+                          </p>
+                        )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="flex gap-2 border-t border-border bg-card/95 px-4 py-3">
+                <Button type="submit" size="sm" disabled={!title.trim() || createTask.isPending}>
+                  {createTask.isPending ? "Adding..." : "Add"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label="Cancel task creation"
+                  onClick={resetAndCloseForm}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
-      <div className="flex gap-2 pt-1">
-        <Button type="submit" size="sm" disabled={!title.trim() || createTask.isPending}>
-          {createTask.isPending ? "Adding..." : "Add"}
-        </Button>
-        <Button type="button" variant="ghost" size="sm" onClick={resetAndCloseForm}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    </form>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
