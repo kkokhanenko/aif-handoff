@@ -43,9 +43,14 @@ describe("readProjectMarkdown", () => {
     expect(readProjectMarkdown(root, "../README.md", "docs/guide.md").path).toBe("README.md");
   });
 
+  it("accepts an absolute Markdown path only when it belongs to the project", () => {
+    const root = makeProject();
+    expect(readProjectMarkdown(root, join(root, "docs", "guide.md")).path).toBe("docs/guide.md");
+  });
+
   it.each<[string, string | undefined, ProjectMarkdownError["status"]]>([
     ["../outside.md", undefined, 403],
-    ["/etc/passwd.md", undefined, 400],
+    ["/etc/passwd.md", undefined, 403],
     ["https://example.com/readme.md", undefined, 400],
     ["package.json", undefined, 400],
   ])("rejects an unsafe or unsupported path: %s", (path, from, status) => {

@@ -21,7 +21,11 @@ export class ProjectMarkdownError extends Error {
   }
 }
 
-function decodeLinkPath(value: string, field: "path" | "from"): string {
+function decodeLinkPath(
+  value: string,
+  field: "path" | "from",
+  allowProjectAbsolute = false,
+): string {
   const pathOnly = value.split(/[?#]/, 1)[0]?.trim() ?? "";
   if (!pathOnly) {
     throw new ProjectMarkdownError(`Missing Markdown ${field}`, "invalid_project_file_path", 400);
@@ -41,12 +45,12 @@ function decodeLinkPath(value: string, field: "path" | "from"): string {
   if (
     decoded.includes("\0") ||
     decoded.includes("\\") ||
-    isAbsolute(decoded) ||
+    (!allowProjectAbsolute && isAbsolute(decoded)) ||
     /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(decoded) ||
     /^[a-zA-Z]:/.test(decoded)
   ) {
     throw new ProjectMarkdownError(
-      `Markdown ${field} must be a relative project path`,
+      `Markdown ${field} must be a safe project path`,
       "invalid_project_file_path",
       400,
     );
@@ -80,27 +84,46 @@ export function readProjectMarkdown(
   requestedPath: string,
   fromPath?: string,
 ): ProjectMarkdownDocument {
-  const linkPath = decodeLinkPath(requestedPath, "path");
+  const linkPath = decodeLinkPath(requestedPath, "path", true);
   const sourcePath = fromPath ? decodeLinkPath(fromPath, "from") : null;
   if (sourcePath) assertMarkdownExtension(sourcePath);
 
-  const projectRelativePath = sourcePath
-    ? posix.normalize(posix.join(posix.dirname(sourcePath), linkPath))
-    : posix.normalize(linkPath);
-  if (projectRelativePath === ".." || projectRelativePath.startsWith("../")) {
-    throw new ProjectMarkdownError(
-      "Markdown path resolves outside the project",
-      "project_file_forbidden",
-      403,
-    );
-  }
-  assertMarkdownExtension(projectRelativePath);
-
+  const configuredRoot = resolve(projectRoot);
   let realRoot: string;
-  let realFile: string;
   try {
     realRoot = realpathSync(projectRoot);
-    realFile = realpathSync(resolve(realRoot, projectRelativePath));
+  } catch {
+    throw new ProjectMarkdownError("Markdown file not found", "project_file_not_found", 404);
+  }
+
+  let candidatePath: string;
+  if (posix.isAbsolute(linkPath)) {
+    candidatePath = posix.normalize(linkPath);
+    if (!isWithinRoot(configuredRoot, candidatePath) && !isWithinRoot(realRoot, candidatePath)) {
+      throw new ProjectMarkdownError(
+        "Markdown path resolves outside the project",
+        "project_file_forbidden",
+        403,
+      );
+    }
+  } else {
+    const projectRelativePath = sourcePath
+      ? posix.normalize(posix.join(posix.dirname(sourcePath), linkPath))
+      : posix.normalize(linkPath);
+    if (projectRelativePath === ".." || projectRelativePath.startsWith("../")) {
+      throw new ProjectMarkdownError(
+        "Markdown path resolves outside the project",
+        "project_file_forbidden",
+        403,
+      );
+    }
+    candidatePath = resolve(realRoot, projectRelativePath);
+  }
+  assertMarkdownExtension(candidatePath);
+
+  let realFile: string;
+  try {
+    realFile = realpathSync(candidatePath);
   } catch {
     throw new ProjectMarkdownError("Markdown file not found", "project_file_not_found", 404);
   }

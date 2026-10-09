@@ -19,10 +19,24 @@ describe("project Markdown links", () => {
     });
   });
 
+  it("routes an absolute project Markdown path to the secured viewer", () => {
+    const open = vi.fn();
+    render(
+      <MarkdownFileLinkProvider value={open}>
+        <Markdown content="[Administration](/home/www/project/docs/administration.md)" />
+      </MarkdownFileLinkProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "Administration" }));
+    expect(open).toHaveBeenCalledWith({
+      href: "/home/www/project/docs/administration.md",
+      sourcePath: undefined,
+    });
+  });
+
   it.each([
     ["External", "https://example.com/guide.md"],
     ["Anchor", "#setup"],
-    ["App route", "/docs/guide.md"],
   ])("leaves %s links to the browser", (label, href) => {
     const open = vi.fn();
     render(

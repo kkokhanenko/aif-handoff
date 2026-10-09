@@ -16,9 +16,7 @@ export function useMarkdownFileLinkHandler(): MarkdownFileLinkHandler | null {
 }
 
 export function isLocalMarkdownLink(href: string | undefined): href is string {
-  if (!href || href.startsWith("#") || href.startsWith("/") || href.startsWith("//")) {
-    return false;
-  }
+  if (!href || href.startsWith("#") || href.startsWith("//")) return false;
   if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(href)) return false;
 
   const path = href.split(/[?#]/, 1)[0] ?? "";
