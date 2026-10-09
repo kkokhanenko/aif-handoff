@@ -324,6 +324,31 @@ export interface TaskOwnership {
   assignees: TaskAssigneeSummary[];
 }
 
+export type TaskKind = "standard" | "fix" | "qa";
+export type QaVerdict = "pass" | "fail" | "blocked" | "error";
+
+export interface QaArtifactDescriptor {
+  path: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  kind: "markdown" | "image" | "trace" | "text" | "binary";
+}
+
+export interface TaskTestEnvironment {
+  environment_id: string;
+  task_id?: string;
+  status: string;
+  test_result?: "passed" | "failed";
+  revision: { kind: "commit" | "worktree"; value: string };
+  url?: string;
+  created_at: string;
+  updated_at: string;
+  expires_at: string;
+  evidence: string[];
+  error?: { code: string; message: string };
+}
+
 export interface HandoffTaskInput {
   executionOwner: ExecutionOwner;
   assigneeIds: string[];
@@ -360,6 +385,8 @@ export interface Task {
   assignees: TaskAssigneeSummary[];
   permissions?: TaskPermissions;
   isFix: boolean;
+  taskKind?: TaskKind;
+  qaVerdict?: QaVerdict | null;
   plannerMode: string;
   planPath: string;
   planDocs: boolean;
@@ -432,6 +459,8 @@ export interface TaskListItem {
   assignees: TaskAssigneeSummary[];
   permissions?: TaskPermissions;
   isFix: boolean;
+  taskKind?: TaskKind;
+  qaVerdict?: QaVerdict | null;
   status: TaskStatus;
   priority: number;
   position: number;
@@ -529,6 +558,7 @@ export interface CreateTaskInput {
   executionOwner?: ExecutionOwner;
   assigneeIds?: string[];
   isFix?: boolean;
+  taskKind?: TaskKind;
   plannerMode?: string;
   planPath?: string;
   planDocs?: boolean;
@@ -557,6 +587,8 @@ export interface UpdateTaskInput {
   priority?: number;
   autoMode?: boolean;
   isFix?: boolean;
+  taskKind?: TaskKind;
+  qaVerdict?: QaVerdict | null;
   plannerMode?: string;
   planPath?: string;
   planDocs?: boolean;

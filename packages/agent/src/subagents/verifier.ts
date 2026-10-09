@@ -12,6 +12,8 @@ const log = logger("verifier");
 interface VerifyGateResult {
   status?: "pass" | "warn" | "fail";
   blocking?: boolean;
+  executionStatus?: "completed" | "blocked" | "error";
+  qaVerdict?: "pass" | "fail";
   blockers?: unknown[];
   suggestedNext?: {
     command?: string;
@@ -42,6 +44,16 @@ function extractVerifyGateResult(resultText: string): VerifyGateResult | null {
           ? record.status
           : undefined,
       blocking: typeof record.blocking === "boolean" ? record.blocking : undefined,
+      executionStatus:
+        record.execution_status === "completed" ||
+        record.execution_status === "blocked" ||
+        record.execution_status === "error"
+          ? record.execution_status
+          : undefined,
+      qaVerdict:
+        record.qa_verdict === "pass" || record.qa_verdict === "fail"
+          ? record.qa_verdict
+          : undefined,
       blockers: Array.isArray(record.blockers) ? record.blockers : undefined,
       suggestedNext: suggestedNextRecord
         ? {
@@ -131,6 +143,17 @@ export async function runVerifier(taskId: string, projectRoot: string): Promise<
   const verifySlashCommand = "/aif-verify";
   const scopeConstraint = `IMPORTANT: Your working directory is ${projectRoot}
 All file reads, searches, and verification commands must stay within this directory. Do NOT navigate to parent directories or other projects.`;
+  const qaContract =
+    task.taskKind === "qa"
+      ? `
+QA task contract:
+- Product defects are a successful test execution, not an execution blocker.
+- Return execution_status=completed and qa_verdict=fail when testing completed and defects were found.
+- Return execution_status=blocked only when the requested testing itself could not be completed.
+- Return execution_status=error only for an internal test/tool failure.
+- Never claim a screenshot, trace, log, or report path unless that file exists and was verified.
+- The final aif-gate-result JSON must include execution_status and qa_verdict.`
+      : "";
   const verifyPrompt = `${verifySlashCommand}
 
 HANDOFF_MODE: 1
@@ -138,6 +161,7 @@ HANDOFF_TASK_ID: ${taskId}
 Autonomous Handoff mode: true.
 Do not ask interactive questions.
 If verification finds issues, report them in the final aif-gate-result block and stop.
+${qaContract}
 
 ${scopeConstraint}
 
@@ -191,6 +215,24 @@ Task description: ${task.description}`;
     });
 
     const gate = extractVerifyGateResult(resultText);
+    if (task.taskKind === "qa") {
+      if (gate?.executionStatus === "completed" && gate.qaVerdict) {
+        setTaskFields(taskId, {
+          qaVerdict: gate.qaVerdict,
+          updatedAt: new Date().toISOString(),
+        });
+        logActivity(taskId, "Agent", `QA execution complete; product verdict=${gate.qaVerdict}`);
+        return;
+      }
+      setTaskFields(taskId, {
+        qaVerdict: gate?.executionStatus === "error" ? "error" : "blocked",
+        updatedAt: new Date().toISOString(),
+      });
+      throw new StageManualBlockError(
+        "QA execution did not complete. Review the Verification section for the blocking test-environment or tooling problem.",
+        "QA execution blocked",
+      );
+    }
     if (!isBlockingGate(gate)) {
       logActivity(taskId, "Agent", "verify stage complete (aif-verify)");
       log.debug(

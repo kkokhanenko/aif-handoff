@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Copy, GitCommitHorizontal, ListPlus, Trash2 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useTask, useRunQa, useRunQaCheck } from "@/hooks/useTasks";
+import { useTask, useRunQa, useRunQaCheck, useSaveTaskQaReport } from "@/hooks/useTasks";
 import { useQaPipelineEnabled } from "@/hooks/useSettings";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { TaskDescription } from "./TaskDescription";
@@ -25,6 +25,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { HandoffDialog } from "./TaskOwnership";
 import { ExecutorTimeline } from "./ExecutorTimeline";
 import { ProjectMarkdownViewer } from "./ProjectMarkdownViewer";
+import { TaskQaEvidence } from "./TaskQaEvidence";
+import { TaskTestEnvironment } from "./TaskTestEnvironment";
 
 interface TaskDetailProps {
   taskId: string | null;
@@ -38,6 +40,7 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
   const actions = useTaskDetailActions(task, onClose);
   const runQaMutation = useRunQa(taskId ?? "");
   const runQaCheckMutation = useRunQaCheck(taskId ?? "");
+  const saveQaReportMutation = useSaveTaskQaReport(taskId ?? "");
   const qaPipelineEnabled = useQaPipelineEnabled();
   const defaultTab: TaskDetailTab = (() => {
     if (!task) return "implementation";
@@ -138,6 +141,12 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                     </Section>
                   )}
 
+                  {task.taskKind === "qa" && (
+                    <Section title="Test environment">
+                      <TaskTestEnvironment taskId={task.id} />
+                    </Section>
+                  )}
+
                   <Section title="Attachments">
                     <TaskAttachments
                       taskId={task.id}
@@ -182,6 +191,83 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                   </Section>
 
                   <div className="border-t border-border pt-4">
+                    {task.taskKind === "qa" && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mr-2"
+                          onClick={() => saveQaReportMutation.mutate()}
+                          disabled={saveQaReportMutation.isPending}
+                        >
+                          <GitCommitHorizontal className="mr-1 h-3 w-3" />
+                          {saveQaReportMutation.isPending ? "Saving..." : "Save QA report"}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mr-2"
+                          onClick={() => {
+                            const reportReference = `.ai-factory/qa/${task.id}/QA_REPORT.md`;
+                            window.dispatchEvent(
+                              new CustomEvent("task:duplicate", {
+                                detail: {
+                                  projectId: task.projectId,
+                                  title: `Исправить дефекты по результатам: ${task.title}`,
+                                  description: `Исправить подтверждённые дефекты из QA-отчёта ${reportReference}.\n\n${task.reviewComments ?? task.implementationLog ?? "Открой QA-отчёт и перенеси подтверждённые дефекты в план исправления."}`,
+                                  taskKind: "fix",
+                                  isFix: true,
+                                  autoMode: task.autoMode,
+                                  priority: task.priority,
+                                  plannerMode: "full",
+                                  planDocs: true,
+                                  planTests: true,
+                                  skipReview: false,
+                                  runPostVerify: true,
+                                  runtimeProfileId: task.runtimeProfileId,
+                                  modelOverride: task.modelOverride,
+                                },
+                              }),
+                            );
+                            onClose();
+                          }}
+                        >
+                          <ListPlus className="mr-1 h-3 w-3" /> Create Fix task
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mr-2"
+                      onClick={() => {
+                        window.dispatchEvent(
+                          new CustomEvent("task:duplicate", {
+                            detail: {
+                              projectId: task.projectId,
+                              title: task.title,
+                              description: task.description,
+                              taskKind: task.taskKind,
+                              isFix: task.isFix,
+                              autoMode: task.autoMode,
+                              priority: task.priority,
+                              plannerMode: task.plannerMode,
+                              planDocs: task.planDocs,
+                              planTests: task.planTests,
+                              skipReview: task.skipReview,
+                              useSubagents: task.useSubagents,
+                              runPlanImprove: task.runPlanImprove,
+                              runPostVerify: task.runPostVerify,
+                              runtimeProfileId: task.runtimeProfileId,
+                              modelOverride: task.modelOverride,
+                            },
+                          }),
+                        );
+                        onClose();
+                      }}
+                    >
+                      <Copy className="mr-1 h-3 w-3" /> Duplicate
+                    </Button>
                     <Button
                       variant="destructive"
                       size="sm"
@@ -190,6 +276,22 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                       <Trash2 className="mr-1 h-3 w-3" /> Delete task
                     </Button>
                   </div>
+                  {saveQaReportMutation.data && (
+                    <AlertBox variant="success" className="text-xs">
+                      QA report saved to branch {saveQaReportMutation.data.branch} at commit{" "}
+                      {saveQaReportMutation.data.commit.slice(0, 8)}
+                      {saveQaReportMutation.data.pushed
+                        ? " and pushed to origin."
+                        : ". Push is still required."}
+                    </AlertBox>
+                  )}
+                  {saveQaReportMutation.error && (
+                    <AlertBox variant="error" className="text-xs">
+                      {saveQaReportMutation.error instanceof Error
+                        ? saveQaReportMutation.error.message
+                        : "Failed to save QA report"}
+                    </AlertBox>
+                  )}
                 </div>
 
                 {/* Right column */}
@@ -222,6 +324,11 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
                       isRunning={task.qaStatus === "running"}
                       isQaCheckRunning={task.qaCheckStatus === "running"}
                     />
+                  )}
+                  {activeTab === "evidence" && task.taskKind === "qa" && (
+                    <Section title="QA Evidence">
+                      <TaskQaEvidence taskId={task.id} />
+                    </Section>
                   )}
                   {activeTab === "activity" && (
                     <Section

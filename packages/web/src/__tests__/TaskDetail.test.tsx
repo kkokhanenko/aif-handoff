@@ -14,6 +14,8 @@ const mockTask: Task = {
   ownershipRevision: 0,
   assignees: [],
   isFix: false,
+  taskKind: "standard",
+  qaVerdict: null,
   plannerMode: "full",
   planPath: ".ai-factory/PLAN.md",
   planDocs: false,
@@ -194,6 +196,7 @@ vi.mock("@/hooks/useTasks", () => ({
   useUpdateTask: () => ({ mutate: mutateUpdateTask }),
   useRunQa: () => ({ mutate: vi.fn(), isPending: false }),
   useRunQaCheck: () => ({ mutate: vi.fn(), isPending: false }),
+  useSaveTaskQaReport: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteTask: () => ({ mutate: mutateDeleteTask }),
   useTaskEvent: () => ({
     mutate: mutateTaskEvent,

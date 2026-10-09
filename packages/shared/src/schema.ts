@@ -137,6 +137,8 @@ export const tasks = sqliteTable("tasks", {
   executionOwner: text("execution_owner").$type<ExecutionOwner>().notNull().default("ai"),
   ownershipRevision: integer("ownership_revision").notNull().default(0),
   isFix: integer("is_fix", { mode: "boolean" }).notNull().default(false),
+  taskKind: text("task_kind").$type<"standard" | "fix" | "qa">().notNull().default("standard"),
+  qaVerdict: text("qa_verdict").$type<"pass" | "fail" | "blocked" | "error" | null>(),
   plannerMode: text("planner_mode").notNull().default("fast"),
   planPath: text("plan_path").notNull().default(".ai-factory/PLAN.md"),
   planDocs: integer("plan_docs", { mode: "boolean" }).notNull().default(false),

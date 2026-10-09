@@ -270,7 +270,7 @@ ${commentsForPrompt}`;
   const handoffBranchLines = preparedBranch
     ? `\nHANDOFF_BRANCH_PREPARED: 1\nHANDOFF_BRANCH_NAME: ${preparedBranch}`
     : "";
-  const handoffContext = `HANDOFF_MODE: 1\nHANDOFF_TASK_ID: ${taskId}${handoffBranchLines}`;
+  const handoffContext = `HANDOFF_MODE: 1\nHANDOFF_TASK_ID: ${taskId}\nHANDOFF_QA_TASK: ${task.taskKind === "qa" ? "1" : "0"}${handoffBranchLines}`;
   const scopeConstraint = `IMPORTANT: Your working directory is ${executionRoot}\nAll files must be created and modified inside this directory. Do NOT navigate to parent directories or other projects.`;
   const plannerSlashCommand = `/aif-plan ${plannerMode} @${planPath} docs:${planDocs} tests:${planTests}`;
 

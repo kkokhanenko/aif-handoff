@@ -916,6 +916,7 @@ POST /tasks
 | `executionOwner` | `ai` \| `human` | no | `ai` | Responsible executor; independent from `autoMode` |
 | `assigneeIds` | string[] | no | `[]` | Active participant IDs for Human ownership (max 100); must be empty for AI ownership |
 | `isFix` | boolean | no | `false` | Marks the task as fix-flow task (uses FIX plan conventions) |
+| `taskKind` | `standard` \| `fix` \| `qa` | no | `standard` | Explicit workflow kind. `fix` keeps the existing fix flow. `qa` is a read-only product-test flow: source changes and automatic Git publishing are disabled; discovered product defects set `qaVerdict=fail` without making task execution fail |
 | `skipReview` | boolean | no | `false` | Skip the review stage — task moves directly from implementing to done |
 | `paused` | boolean | no | `false` | Pause agent processing — coordinator skips this task until resumed |
 | `useSubagents` | boolean | no | `false` | Run via custom subagents (`plan-coordinator`, `implement-coordinator`, sidecars). `false` uses `aif-*` skills directly |
@@ -959,25 +960,27 @@ runtime options, auto-review state, and QA detail text when present.
 
 Notable task fields in the response:
 
-| Field                         | Type          | Description                                                                                                      |
-| ----------------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `manualReviewRequired`        | boolean       | `true` when auto-review stopped and explicit human review is required while the task remains in `done`           |
-| `autoReviewState`             | object\|null  | Latest persisted blocking-findings snapshot used by the auto-review loop (`strategy`, `iteration`, `findings[]`) |
-| `runtimeLimitSnapshot`        | object\|null  | Persisted runtime-limit snapshot copied onto the task when quota gating or quota failure blocks execution        |
-| `runtimeLimitUpdatedAt`       | string\|null  | ISO timestamp for the last task-level runtime-limit snapshot write                                               |
-| `autoQa`                      | boolean       | When `true`, the QA pipeline runs automatically once the task is approved (`approve_done`)                       |
-| `autoQaCheck`                 | boolean       | When `true`, a successful QA generation run continues into automated QA Check                                    |
-| `qaStatus`                    | string        | QA run lifecycle: `idle`, `running`, `done`, or `error`                                                          |
-| `qaChangeSummary`             | string\|null  | Markdown change-summary artifact from the latest QA run (`null` until generated)                                 |
-| `qaTestPlan`                  | string\|null  | Markdown test-plan artifact from the latest QA run (`null` until generated)                                      |
-| `qaTestCases`                 | string\|null  | Markdown test-cases artifact from the latest QA run (`null` until generated)                                     |
-| `qaCheckStatus`               | string        | QA Check lifecycle: `idle`, `running`, `done`, or `error`                                                        |
-| `qaCheckReport`               | string\|null  | Markdown `qa-check.md` report from the latest automated case execution                                           |
-| `qaCheckPlaywrightConfigured` | boolean\|null | Whether the effective runtime reported a configured `playwright` MCP server at the latest check; advisory only   |
-| `executionOwner`              | `ai`\|`human` | Executor responsible for the task; independent from `autoMode`                                                   |
-| `ownershipRevision`           | integer       | Monotonic optimistic-concurrency revision for assignments/handoffs                                               |
-| `assignees`                   | array         | Immutable participant summaries for current Human assignees                                                      |
-| `permissions`                 | object        | Server-derived `canAssign`, `canHandoff`, `canSelfAssign`, `canAct`, `canComment`, and `permittedActions`        |
+| Field                         | Type          | Description                                                                                                                                                  |
+| ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `manualReviewRequired`        | boolean       | `true` when auto-review stopped and explicit human review is required while the task remains in `done`                                                       |
+| `autoReviewState`             | object\|null  | Latest persisted blocking-findings snapshot used by the auto-review loop (`strategy`, `iteration`, `findings[]`)                                             |
+| `runtimeLimitSnapshot`        | object\|null  | Persisted runtime-limit snapshot copied onto the task when quota gating or quota failure blocks execution                                                    |
+| `runtimeLimitUpdatedAt`       | string\|null  | ISO timestamp for the last task-level runtime-limit snapshot write                                                                                           |
+| `autoQa`                      | boolean       | When `true`, the QA pipeline runs automatically once the task is approved (`approve_done`)                                                                   |
+| `autoQaCheck`                 | boolean       | When `true`, a successful QA generation run continues into automated QA Check                                                                                |
+| `qaStatus`                    | string        | QA run lifecycle: `idle`, `running`, `done`, or `error`                                                                                                      |
+| `qaChangeSummary`             | string\|null  | Markdown change-summary artifact from the latest QA run (`null` until generated)                                                                             |
+| `qaTestPlan`                  | string\|null  | Markdown test-plan artifact from the latest QA run (`null` until generated)                                                                                  |
+| `qaTestCases`                 | string\|null  | Markdown test-cases artifact from the latest QA run (`null` until generated)                                                                                 |
+| `qaCheckStatus`               | string        | QA Check lifecycle: `idle`, `running`, `done`, or `error`                                                                                                    |
+| `qaCheckReport`               | string\|null  | Markdown `qa-check.md` report from the latest automated case execution                                                                                       |
+| `qaCheckPlaywrightConfigured` | boolean\|null | Whether the effective runtime reported a configured `playwright` MCP server at the latest check; advisory only                                               |
+| `taskKind`                    | string        | Workflow kind: `standard`, `fix`, or `qa`                                                                                                                    |
+| `qaVerdict`                   | string\|null  | QA outcome for a QA task: `pass`, `fail`, `blocked`, or `error`. Product defects use `fail`; infrastructure/test execution failures use `blocked` or `error` |
+| `executionOwner`              | `ai`\|`human` | Executor responsible for the task; independent from `autoMode`                                                                                               |
+| `ownershipRevision`           | integer       | Monotonic optimistic-concurrency revision for assignments/handoffs                                                                                           |
+| `assignees`                   | array         | Immutable participant summaries for current Human assignees                                                                                                  |
+| `permissions`                 | object        | Server-derived `canAssign`, `canHandoff`, `canSelfAssign`, `canAct`, `canComment`, and `permittedActions`                                                    |
 
 ### Handoff Task Ownership
 
@@ -1019,6 +1022,48 @@ Returns executor snapshots ordered by `ownershipRevision`, then creation time an
 Each immutable row records task title/status, owner, assignee display-name/role/active
 snapshots, actor, optional reason, and timestamp. It is not derived from mutable activity
 logs.
+
+### QA task artifacts and test environment
+
+These endpoints back the **Evidence** and **Environment** sections of QA task detail.
+Only files that physically exist under `.ai-factory/qa/<task-id>/` are listed; report
+text cannot create synthetic screenshot or trace entries.
+
+```text
+GET    /tasks/:id/qa-artifacts
+GET    /tasks/:id/qa-artifacts/content?path=<relative-path>
+GET    /tasks/:id/qa-artifacts/content?path=<relative-path>&format=json
+GET    /tasks/:id/test-environments
+GET    /tasks/:id/test-environments/:environmentId/evidence?path=<registered-path>
+DELETE /tasks/:id/test-environments/:environmentId
+POST   /tasks/:id/save-qa-report
+```
+
+- Text content requested with `format=json` returns `{ "content": "..." }` and is
+  limited to 2 MiB. Binary content is streamed inline/downloadable.
+- Test environments are selected by the exact task ID. Deletion is accepted only for
+  an environment returned for that task and requires normal task mutation permission.
+- `save-qa-report` is a manual action available only for QA tasks. It creates
+  `qa/task-<short-id>-report` in a temporary Git worktree, commits the real text/image
+  QA artifacts, attempts to push the branch, and leaves the project's active checkout
+  unchanged. ZIP/binary artifacts remain downloadable evidence and are reported in
+  `excluded`; suspected credentials cause the save to fail closed.
+
+`save-qa-report` returns:
+
+```json
+{
+  "branch": "qa/task-c1134781-report",
+  "commit": "0123456789abcdef",
+  "pushed": true,
+  "excluded": ["playwright/trace.zip"]
+}
+```
+
+The QA verifier contract separates execution from the product verdict. A completed
+test run with confirmed defects finishes normally (`qaVerdict=fail`, task may move to
+`done`). Missing access, unavailable browser/runtime, or other inability to perform the
+requested checks is an execution blocker (`qaVerdict=blocked` or `error`).
 
 ### Download Task Attachment
 

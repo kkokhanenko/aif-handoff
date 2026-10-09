@@ -10,6 +10,8 @@ import type {
   CreateTaskCommentInput,
   HandoffTaskInput,
   TaskExecutorHistoryEntry,
+  QaArtifactDescriptor,
+  TaskTestEnvironment,
 } from "@aif/shared/browser";
 import { api } from "../lib/api.js";
 import { invalidateProjectTaskOverviews } from "./useProjects.js";
@@ -48,6 +50,43 @@ export function useTaskExecutorHistory(id: string | null) {
     queryKey: ["task-executor-history", id],
     queryFn: () => api.getTaskExecutorHistory(id!),
     enabled: !!id,
+  });
+}
+
+export function useTaskQaArtifacts(id: string | null) {
+  return useQuery<QaArtifactDescriptor[]>({
+    queryKey: ["task-qa-artifacts", id],
+    queryFn: () => api.listTaskQaArtifacts(id!),
+    enabled: !!id,
+  });
+}
+
+export function useTaskTestEnvironments(id: string | null, enabled = true) {
+  return useQuery<{
+    configured: boolean;
+    environments: TaskTestEnvironment[];
+    unavailable?: boolean;
+  }>({
+    queryKey: ["task-test-environments", id],
+    queryFn: () => api.listTaskTestEnvironments(id!),
+    enabled: !!id && enabled,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useDestroyTaskTestEnvironment(taskId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (environmentId: string) => api.destroyTaskTestEnvironment(taskId, environmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task-test-environments", taskId] });
+    },
+  });
+}
+
+export function useSaveTaskQaReport(taskId: string) {
+  return useMutation({
+    mutationFn: () => api.saveTaskQaReport(taskId),
   });
 }
 

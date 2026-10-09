@@ -110,6 +110,61 @@ describe("runVerifier", () => {
     expect(executeSubagentQueryMock).toHaveBeenCalledTimes(1);
   });
 
+  it("completes a QA task when testing finished with product defects", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-qa-fail",
+        projectId: "project-1",
+        title: "Full browser QA",
+        description: "Test without product changes",
+        taskKind: "qa",
+        status: "verify",
+      })
+      .run();
+    executeSubagentQueryMock.mockResolvedValueOnce({
+      resultText:
+        'QA completed with defects\n```aif-gate-result\n{"status":"fail","blocking":false,"execution_status":"completed","qa_verdict":"fail"}\n```',
+    });
+
+    await expect(runVerifier("task-qa-fail", "/tmp/verifier-test")).resolves.toBeUndefined();
+    const updated = testDb.current.select().from(tasks).where(eq(tasks.id, "task-qa-fail")).get();
+    expect(updated?.qaVerdict).toBe("fail");
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "task-qa-fail",
+      "Agent",
+      "QA execution complete; product verdict=fail",
+    );
+  });
+
+  it("blocks a QA task when test execution itself did not complete", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-qa-blocked",
+        projectId: "project-1",
+        title: "Full browser QA",
+        description: "Test without product changes",
+        taskKind: "qa",
+        status: "verify",
+      })
+      .run();
+    executeSubagentQueryMock.mockResolvedValueOnce({
+      resultText:
+        'Environment unavailable\n```aif-gate-result\n{"status":"fail","blocking":true,"execution_status":"blocked"}\n```',
+    });
+
+    await expect(runVerifier("task-qa-blocked", "/tmp/verifier-test")).rejects.toThrow(
+      "QA execution blocked",
+    );
+    const updated = testDb.current
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, "task-qa-blocked"))
+      .get();
+    expect(updated?.qaVerdict).toBe("blocked");
+  });
+
   it("runs the exact allowlisted aif-fix remediation and verifies again", async () => {
     testDb.current
       .insert(tasks)

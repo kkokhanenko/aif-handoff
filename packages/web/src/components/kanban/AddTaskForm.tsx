@@ -14,7 +14,13 @@ import { useRuntimeProfiles, useRuntimes } from "@/hooks/useRuntimeProfiles";
 import { useAuth } from "@/hooks/useAuth";
 import { useParticipants } from "@/hooks/useParticipants";
 import { formatRuntimeProfileOptionLabel } from "@/lib/runtimeProfiles";
-import { generatePlanPath, defaultsForMode, type ExecutionOwner } from "@aif/shared/browser";
+import {
+  generatePlanPath,
+  defaultsForMode,
+  type ExecutionOwner,
+  type TaskKind,
+  type CreateTaskInput,
+} from "@aif/shared/browser";
 import { PlannerSettings } from "./PlannerSettings";
 import { OwnershipFields } from "@/components/task/TaskOwnership";
 
@@ -32,7 +38,7 @@ export function AddTaskForm({ projectId }: Props) {
   const [autoMode, setAutoMode] = useState(true);
   const [executionOwner, setExecutionOwner] = useState<ExecutionOwner>("ai");
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
-  const [isFix, setIsFix] = useState(false);
+  const [taskKind, setTaskKind] = useState<TaskKind>("standard");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [plannerMode, setPlannerMode] = useState<"full" | "fast">("fast");
   const [planPath, setPlanPath] = useState(DEFAULT_PLAN_PATH);
@@ -121,7 +127,7 @@ export function AddTaskForm({ projectId }: Props) {
     setAutoMode(true);
     setExecutionOwner("ai");
     setAssigneeIds([]);
-    setIsFix(false);
+    setTaskKind("standard");
     setShowAdvanced(false);
     setPlannerMode("fast");
     setPlanPath(defaultPlanPath);
@@ -141,15 +147,39 @@ export function AddTaskForm({ projectId }: Props) {
     userOverride.current = false;
   }, [defaultPlanPath, maxReviewIterationsDefault, useSubagentsDefault]);
 
-  const openForm = useCallback(() => {
-    syncServerDefaultsIntoForm();
-    setIsOpen(true);
-  }, [syncServerDefaultsIntoForm]);
+  const openForm = useCallback(
+    (event?: Event) => {
+      syncServerDefaultsIntoForm();
+      const duplicate = (event as CustomEvent<Partial<CreateTaskInput>> | undefined)?.detail;
+      if (duplicate) {
+        setTitle(duplicate.title ? `${duplicate.title} (copy)` : "");
+        setDescription(duplicate.description ?? "");
+        setTaskKind(duplicate.taskKind ?? (duplicate.isFix ? "fix" : "standard"));
+        setAutoMode(duplicate.autoMode ?? true);
+        setPriority(duplicate.priority ?? 0);
+        setPlannerMode(duplicate.plannerMode === "full" ? "full" : "fast");
+        setPlanDocs(duplicate.planDocs ?? DEFAULT_PLAN_DOCS);
+        setPlanTests(duplicate.planTests ?? false);
+        setSkipReview(duplicate.skipReview ?? false);
+        setUseSubagents(duplicate.useSubagents ?? false);
+        setRunPlanImprove(duplicate.runPlanImprove ?? false);
+        setRunPostVerify(duplicate.runPostVerify ?? false);
+        setRuntimeProfileId(duplicate.runtimeProfileId ?? "");
+        setModelOverride(duplicate.modelOverride ?? "");
+      }
+      setIsOpen(true);
+    },
+    [syncServerDefaultsIntoForm],
+  );
 
   // Listen for global task:create event (Ctrl+N)
   useEffect(() => {
     window.addEventListener("task:create", openForm);
-    return () => window.removeEventListener("task:create", openForm);
+    window.addEventListener("task:duplicate", openForm);
+    return () => {
+      window.removeEventListener("task:create", openForm);
+      window.removeEventListener("task:duplicate", openForm);
+    };
   }, [openForm]);
 
   // Sheet owns Escape/overlay handling. Closing the panel keeps the draft;
@@ -202,7 +232,8 @@ export function AddTaskForm({ projectId }: Props) {
         autoMode,
         executionOwner,
         assigneeIds: executionOwner === "human" ? assigneeIds : [],
-        isFix,
+        isFix: taskKind === "fix",
+        taskKind,
         plannerMode: effectiveMode,
         planPath: effectivePlanPath,
         planDocs,
@@ -235,7 +266,7 @@ export function AddTaskForm({ projectId }: Props) {
         variant="ghost"
         size="sm"
         className="w-full justify-center gap-1 border border-dashed border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-        onClick={openForm}
+        onClick={() => openForm()}
         type="button"
       >
         <Plus className="h-4 w-4" />
@@ -280,8 +311,8 @@ export function AddTaskForm({ projectId }: Props) {
                       <Radio
                         name="taskType"
                         aria-label="Standard"
-                        checked={!isFix}
-                        onChange={() => setIsFix(false)}
+                        checked={taskKind === "standard"}
+                        onChange={() => setTaskKind("standard")}
                         className="mt-0.5 h-3.5 w-3.5"
                       />
                       <span>
@@ -293,14 +324,36 @@ export function AddTaskForm({ projectId }: Props) {
                       <Radio
                         name="taskType"
                         aria-label="Fix"
-                        checked={isFix}
-                        onChange={() => setIsFix(true)}
+                        checked={taskKind === "fix"}
+                        onChange={() => setTaskKind("fix")}
                         className="mt-0.5 h-3.5 w-3.5"
                       />
                       <span>
                         <span className="font-medium text-foreground">Fix</span>
                         {
                           " - Use when something is not working correctly or is broken; a patch will be created for the self-learning system."
+                        }
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <Radio
+                        name="taskType"
+                        aria-label="Test / QA"
+                        checked={taskKind === "qa"}
+                        onChange={() => {
+                          setTaskKind("qa");
+                          setPlanDocs(false);
+                          setPlanTests(true);
+                          setSkipReview(true);
+                          setRunPostVerify(true);
+                          setUseSubagents(false);
+                        }}
+                        className="mt-0.5 h-3.5 w-3.5"
+                      />
+                      <span>
+                        <span className="font-medium text-foreground">Test / QA</span>
+                        {
+                          " - Test without changing product code. Found defects are recorded as the QA verdict, while completed testing can still finish the task."
                         }
                       </span>
                     </label>
@@ -363,7 +416,7 @@ export function AddTaskForm({ projectId }: Props) {
                     />
                   </div>
                 </div>
-                {!isFix && (
+                {taskKind !== "fix" && (
                   <div className="space-y-2">
                     <Button
                       type="button"

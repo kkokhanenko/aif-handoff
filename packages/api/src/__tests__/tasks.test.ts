@@ -631,6 +631,31 @@ describe("tasks API", () => {
       expect(body.isFix).toBe(true);
     });
 
+    it("should create a QA task with the safe verification workflow", async () => {
+      const res = await app.request("/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "Browser QA",
+          description: "Test without changing product code",
+          projectId: "test-project",
+          taskKind: "qa",
+          useSubagents: true,
+        }),
+      });
+
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        taskKind: "qa",
+        isFix: false,
+        useSubagents: false,
+        skipReview: true,
+        planTests: true,
+        runPostVerify: true,
+      });
+    });
+
     it("should create a task with paused=true", async () => {
       const res = await app.request("/tasks", {
         method: "POST",
@@ -2588,6 +2613,55 @@ describe("tasks API", () => {
       expect(res.headers.get("Content-Disposition")).toBe('attachment; filename="notes.md"');
       const body = await res.arrayBuffer();
       expect(Buffer.from(body).toString()).toBe("comment file data");
+    });
+  });
+
+  describe("QA artifact endpoints", () => {
+    it("lists only physical task artifacts and previews text as JSON", async () => {
+      const rootPath = mkdtempSync(join(tmpdir(), "aif-qa-artifacts-"));
+      const artifactRoot = join(rootPath, ".ai-factory", "qa", "qa-task");
+      mkdirSync(artifactRoot, { recursive: true });
+      writeFileSync(join(artifactRoot, "QA_REPORT.md"), "# QA\n\nVerdict: FAIL\n");
+      insertTestProject(testDb.current, rootPath);
+      testDb.current
+        .insert(tasks)
+        .values({
+          id: "qa-task",
+          projectId: "test-project",
+          title: "QA",
+          taskKind: "qa",
+        })
+        .run();
+
+      const listResponse = await app.request("/tasks/qa-task/qa-artifacts");
+      expect(listResponse.status).toBe(200);
+      expect(await listResponse.json()).toEqual([
+        expect.objectContaining({ path: "QA_REPORT.md", kind: "markdown" }),
+      ]);
+
+      const previewResponse = await app.request(
+        "/tasks/qa-task/qa-artifacts/content?path=QA_REPORT.md&format=json",
+      );
+      expect(previewResponse.status).toBe(200);
+      expect(await previewResponse.json()).toEqual({ content: "# QA\n\nVerdict: FAIL\n" });
+    });
+
+    it("does not serve an artifact outside the exact task directory", async () => {
+      const rootPath = mkdtempSync(join(tmpdir(), "aif-qa-artifacts-safe-"));
+      insertTestProject(testDb.current, rootPath);
+      testDb.current
+        .insert(tasks)
+        .values({
+          id: "qa-safe",
+          projectId: "test-project",
+          title: "QA",
+          taskKind: "qa",
+        })
+        .run();
+
+      const response = await app.request("/tasks/qa-safe/qa-artifacts/content?path=..%2F..%2F.env");
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ code: "qa_artifact_not_found" });
     });
   });
 

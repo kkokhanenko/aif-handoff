@@ -36,6 +36,8 @@ import type {
   ProjectTestCredential,
   CreateProjectTestCredentialInput,
   UpdateProjectTestCredentialInput,
+  QaArtifactDescriptor,
+  TaskTestEnvironment,
 } from "@aif/shared/browser";
 
 export class ApiError extends Error {
@@ -683,6 +685,51 @@ export const api = {
     const params = new URLSearchParams({ path });
     if (from) params.set("from", from);
     return request(`${API_BASE}/${encodeURIComponent(id)}/project-markdown?${params.toString()}`);
+  },
+
+  listTaskQaArtifacts(id: string): Promise<QaArtifactDescriptor[]> {
+    return request(`${API_BASE}/${encodeURIComponent(id)}/qa-artifacts`);
+  },
+
+  taskQaArtifactUrl(id: string, path: string): string {
+    return `${API_PREFIX}${API_BASE}/${encodeURIComponent(id)}/qa-artifacts/content?path=${encodeURIComponent(path)}`;
+  },
+
+  getTaskQaArtifactText(id: string, path: string): Promise<{ content: string }> {
+    const params = new URLSearchParams({ path, format: "json" });
+    return request(
+      `${API_BASE}/${encodeURIComponent(id)}/qa-artifacts/content?${params.toString()}`,
+    );
+  },
+
+  listTaskTestEnvironments(
+    id: string,
+  ): Promise<{ configured: boolean; environments: TaskTestEnvironment[]; unavailable?: boolean }> {
+    return request(`${API_BASE}/${encodeURIComponent(id)}/test-environments`);
+  },
+
+  destroyTaskTestEnvironment(id: string, environmentId: string): Promise<TaskTestEnvironment> {
+    return request(
+      `${API_BASE}/${encodeURIComponent(id)}/test-environments/${encodeURIComponent(environmentId)}`,
+      { method: "DELETE" },
+    );
+  },
+
+  taskTestEnvironmentEvidenceUrl(id: string, environmentId: string, path: string): string {
+    return `${API_PREFIX}${API_BASE}/${encodeURIComponent(id)}/test-environments/${encodeURIComponent(environmentId)}/evidence?path=${encodeURIComponent(path)}`;
+  },
+
+  saveTaskQaReport(id: string): Promise<{
+    branch: string;
+    commit: string;
+    pushed: boolean;
+    excluded: string[];
+  }> {
+    return request(
+      `${API_BASE}/${encodeURIComponent(id)}/save-qa-report`,
+      { method: "POST" },
+      120_000,
+    );
   },
 
   createTask(input: CreateTaskInput): Promise<Task> {

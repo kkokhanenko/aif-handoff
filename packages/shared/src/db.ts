@@ -1122,6 +1122,23 @@ const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 32,
+    description: "Add explicit task kind and QA verdict",
+    sql: `
+      ALTER TABLE tasks ADD COLUMN task_kind TEXT NOT NULL DEFAULT 'standard';
+      ALTER TABLE tasks ADD COLUMN qa_verdict TEXT;
+    `,
+    backfill: (sqlite) => {
+      if (!hasColumn(sqlite, "tasks", "is_fix") || !hasColumn(sqlite, "tasks", "task_kind")) {
+        return { taskKindsBackfilled: 0 };
+      }
+      const result = sqlite
+        .prepare("UPDATE tasks SET task_kind = 'fix' WHERE is_fix = 1 AND task_kind = 'standard'")
+        .run();
+      return { taskKindsBackfilled: result.changes };
+    },
+  },
 ];
 
 function splitSqlStatements(sqlText: string): string[] {

@@ -28,6 +28,7 @@ const createTaskInputSchema: Record<string, z.ZodTypeAny> = {
   plannerMode: z.enum(["fast", "full"]).optional().describe("Planner mode"),
   autoMode: z.boolean().optional().describe("Enable auto mode for agent processing"),
   isFix: z.boolean().optional().describe("Mark task as a fix"),
+  taskKind: z.enum(["standard", "fix", "qa"]).optional().describe("Task workflow kind"),
   planDocs: z.boolean().optional().describe("Include documentation in plan"),
   planTests: z.boolean().optional().describe("Include tests in plan"),
   skipReview: z.boolean().optional().describe("Skip review stage"),
@@ -61,6 +62,7 @@ type CreateTaskArgs = {
   autoMode?: boolean;
   description?: string;
   isFix?: boolean;
+  taskKind?: "standard" | "fix" | "qa";
   maxReviewIterations?: number;
   modelOverride?: string | null;
   paused?: boolean;
@@ -131,12 +133,14 @@ export function register(server: McpServer, context: ToolContext): void {
           id: "mcp",
           displayNameSnapshot: "MCP",
         },
-        isFix: args.isFix,
+        isFix: args.taskKind ? args.taskKind === "fix" : args.isFix,
+        taskKind: args.taskKind ?? (args.isFix ? "fix" : "standard"),
         planPath: args.planPath,
-        planDocs: args.planDocs,
-        planTests: args.planTests,
-        skipReview: args.skipReview,
-        useSubagents: args.useSubagents,
+        planDocs: args.taskKind === "qa" ? (args.planDocs ?? false) : args.planDocs,
+        planTests: args.taskKind === "qa" ? true : args.planTests,
+        skipReview: args.taskKind === "qa" ? true : args.skipReview,
+        useSubagents: args.taskKind === "qa" ? false : args.useSubagents,
+        runPostVerify: args.taskKind === "qa" ? true : undefined,
         maxReviewIterations: args.maxReviewIterations,
         paused: args.paused,
         runtimeProfileId: args.runtimeProfileId,

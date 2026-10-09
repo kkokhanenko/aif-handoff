@@ -309,7 +309,9 @@ function updateTaskStatus(
 }
 
 async function ensureCommitBeforeTerminalStatus(task: TaskRow, projectRoot: string): Promise<void> {
-  if (!AUTO_QUEUE_COMMIT_GATE_ENABLED) {
+  // QA artifacts are intentionally persisted only by the user's explicit
+  // "Save QA report" action. Completing a QA run must not mutate Git history.
+  if (!AUTO_QUEUE_COMMIT_GATE_ENABLED || task.taskKind === "qa") {
     return;
   }
   try {
@@ -621,7 +623,7 @@ async function processOneTask(task: TaskRow, stage: StatusTransition): Promise<b
 
     flushActivityQueue(task.id);
 
-    if (stage.label === "implementer") {
+    if (stage.label === "implementer" && task.taskKind !== "qa") {
       assertTaskAttemptCurrent(task.id);
       await publishGitHubTask(task.id, project.rootPath);
       assertTaskAttemptCurrent(task.id);

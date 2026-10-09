@@ -263,7 +263,8 @@ All files must be created and modified inside this directory. Do NOT create file
   const implementSlashCommand = `/aif-implement ${planSection}`;
   const handoffContext = `HANDOFF_MODE: 1
 HANDOFF_TASK_ID: ${taskId}
-HANDOFF_SKIP_REVIEW: ${task.skipReview ? "1" : "0"}`;
+HANDOFF_SKIP_REVIEW: ${task.skipReview ? "1" : "0"}
+HANDOFF_QA_TASK: ${task.taskKind === "qa" ? "1" : "0"}`;
 
   const isRework = task.reworkRequested;
 
@@ -348,6 +349,8 @@ ${isRework ? "Rework mode: true (requested from done/request_changes)." : "Rewor
 Execution rules:
 - Respect task dependencies and checklist state from the plan file.
 - Keep plan checklist state accurate while implementing.
+- ${task.taskKind === "qa" ? "This is QA-only: do not modify product source code, dependencies, or product documentation; only the plan checklist and task-scoped QA artifacts may change." : "Implement the requested product change within the task scope."}
+- ${task.taskKind === "qa" ? "Pass HANDOFF_TASK_ID as task_id to testbench_prepare and never list evidence paths unless those files exist." : "Keep generated artifacts scoped to this task."}
 - Run tests/lint/verification relevant to the changes.
 - IMPORTANT: The plan file is ${effectivePlanPath}. Always read from and annotate this exact file — do not create plan files at other paths.${reworkProtocolBlock}`;
   const workflowSpec = createRuntimeWorkflowSpec({

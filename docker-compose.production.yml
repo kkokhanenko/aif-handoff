@@ -67,13 +67,14 @@ services:
       - "${HTTPS_PORT:-443}:443"
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+      - PREVIEW_DOMAIN=${PREVIEW_DOMAIN:-preview.localhost}
     volumes:
       - ssl-certs:/etc/angie/ssl
     entrypoint:
       [
         "/bin/sh",
         "-c",
-        "mkdir -p /run/angie && sed -i 's/worker_processes.*/worker_processes 2;/' /etc/angie/angie.conf && envsubst '$$DOMAIN' < /etc/angie/http.d/production.conf.template > /etc/angie/http.d/default.conf && exec angie -g 'daemon off;'",
+        "mkdir -p /run/angie && sed -i 's/worker_processes.*/worker_processes 2;/' /etc/angie/angie.conf && envsubst '$$DOMAIN $$PREVIEW_DOMAIN' < /etc/angie/http.d/production.conf.template > /etc/angie/http.d/default.conf && exec angie -g 'daemon off;'",
       ]
     depends_on:
       api:

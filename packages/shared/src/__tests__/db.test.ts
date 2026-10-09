@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { chatSessions } from "../schema.js";
 import { closeDb, createTestDb, getDb } from "../db.js";
 
-const CURRENT_SCHEMA_VERSION = 30;
+const CURRENT_SCHEMA_VERSION = 32;
 
 function removeSqliteArtifacts(dbPath: string): void {
   for (const path of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
@@ -45,7 +45,7 @@ describe("db", () => {
       getDb(dbPath);
       closeDb();
       const upgraded = new Database(dbPath, { readonly: true });
-      expect(upgraded.pragma("user_version", { simple: true })).toBe(30);
+      expect(upgraded.pragma("user_version", { simple: true })).toBe(CURRENT_SCHEMA_VERSION);
       expect(
         upgraded
           .prepare("SELECT stage_attempt_id, stage_started_at, status FROM tasks WHERE id = ?")

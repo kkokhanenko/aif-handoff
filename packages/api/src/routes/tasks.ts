@@ -64,6 +64,14 @@ import {
 import { validateProjectScopedRuntimeProfileSelections } from "../services/runtimeProfileScope.js";
 import { getParticipantAuth, type ParticipantApiEnv } from "../middleware/participantAuth.js";
 import { ProjectMarkdownError, readProjectMarkdown } from "../services/projectMarkdown.js";
+import { listQaArtifacts, readQaArtifact } from "../services/qaArtifacts.js";
+import {
+  destroyTestEnvironment,
+  findTaskTestEnvironments,
+  readTestbenchEvidence,
+  testbenchConfigured,
+} from "../services/testbench.js";
+import { saveQaReport } from "../services/saveQaReport.js";
 
 const log = logger("tasks-route");
 const QA_LOCK_DURATION_MS =
@@ -505,11 +513,14 @@ tasksRouter.post("/", jsonValidator(createTaskSchema), async (c) => {
 
   // Fill omitted flag values from mode-driven defaults (mirror of web UI behavior).
   const modeDefaults = defaultsForMode(body.plannerMode);
-  const resolvedSkipReview = body.skipReview ?? modeDefaults.skipReview;
-  const resolvedPlanDocs = body.planDocs ?? modeDefaults.planDocs;
-  const resolvedPlanTests = body.planTests ?? modeDefaults.planTests;
+  const isQaTask = body.taskKind === "qa";
+  const resolvedSkipReview = isQaTask ? true : (body.skipReview ?? modeDefaults.skipReview);
+  const resolvedPlanDocs = isQaTask
+    ? (body.planDocs ?? false)
+    : (body.planDocs ?? modeDefaults.planDocs);
+  const resolvedPlanTests = isQaTask ? true : (body.planTests ?? modeDefaults.planTests);
   const resolvedRunPlanImprove = body.useSubagents ? false : body.runPlanImprove;
-  const resolvedRunPostVerify = body.useSubagents ? false : body.runPostVerify;
+  const resolvedRunPostVerify = isQaTask ? true : body.useSubagents ? false : body.runPostVerify;
   if (
     body.skipReview === undefined ||
     body.planDocs === undefined ||
@@ -539,13 +550,14 @@ tasksRouter.post("/", jsonValidator(createTaskSchema), async (c) => {
     executionOwner: body.executionOwner,
     assigneeIds: body.assigneeIds,
     actor,
-    isFix: body.isFix,
+    isFix: body.taskKind ? body.taskKind === "fix" : body.isFix,
+    taskKind: body.taskKind ?? (body.isFix ? "fix" : "standard"),
     plannerMode: body.plannerMode,
     planPath: body.planPath ?? defaultPlanPath,
     planDocs: resolvedPlanDocs,
     planTests: resolvedPlanTests,
     skipReview: resolvedSkipReview,
-    useSubagents: body.useSubagents,
+    useSubagents: isQaTask ? false : body.useSubagents,
     runPlanImprove: resolvedRunPlanImprove,
     runPostVerify: resolvedRunPostVerify,
     autoQa: body.autoQa,
@@ -777,6 +789,129 @@ tasksRouter.get("/:id/project-markdown", (c) => {
   }
 });
 
+// GET /tasks/:id/qa-artifacts — list only files that physically exist.
+tasksRouter.get("/:id/qa-artifacts", async (c) => {
+  const { id } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  const project = findProjectById(task.projectId);
+  if (!project) return c.json({ error: "Project not found", code: "project_not_found" }, 404);
+  return c.json(await listQaArtifacts(task.worktreePath ?? project.rootPath, id));
+});
+
+tasksRouter.get("/:id/qa-artifacts/content", async (c) => {
+  const { id } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  const project = findProjectById(task.projectId);
+  if (!project) return c.json({ error: "Project not found", code: "project_not_found" }, 404);
+  const artifactPath = c.req.query("path");
+  if (!artifactPath) return c.json({ error: "Artifact path is required" }, 400);
+  try {
+    const artifact = await readQaArtifact(task.worktreePath ?? project.rootPath, id, artifactPath);
+    if (c.req.query("format") === "json") {
+      if (!artifact.mimeType.startsWith("text/")) {
+        return c.json(
+          { error: "Only text artifacts can be previewed as JSON", code: "qa_artifact_not_text" },
+          409,
+        );
+      }
+      if (artifact.buffer.length > 2 * 1024 * 1024) {
+        return c.json(
+          { error: "QA artifact is too large to preview", code: "qa_artifact_too_large" },
+          413,
+        );
+      }
+      c.header("Cache-Control", "no-store");
+      return c.json({ content: artifact.buffer.toString("utf8") });
+    }
+    c.header("Content-Type", artifact.mimeType);
+    c.header("Cache-Control", "no-store");
+    c.header(
+      "Content-Disposition",
+      `inline; filename="${encodeURIComponent(artifactPath.split("/").at(-1) ?? "artifact")}"`,
+    );
+    return new Response(new Uint8Array(artifact.buffer), { headers: c.res.headers });
+  } catch {
+    return c.json({ error: "QA artifact not found", code: "qa_artifact_not_found" }, 404);
+  }
+});
+
+tasksRouter.get("/:id/test-environments", async (c) => {
+  const { id } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  if (!testbenchConfigured()) return c.json({ configured: false, environments: [] });
+  try {
+    return c.json({ configured: true, environments: await findTaskTestEnvironments(id) });
+  } catch (error) {
+    log.warn({ taskId: id, error }, "Failed to load Testbench environments");
+    return c.json({ configured: true, environments: [], unavailable: true }, 503);
+  }
+});
+
+tasksRouter.delete("/:id/test-environments/:environmentId", async (c) => {
+  const { id, environmentId } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  if (!canMutateTask(c, id)) return c.json({ error: "Forbidden", code: "forbidden" }, 403);
+  const linked = (await findTaskTestEnvironments(id)).some(
+    (environment) => environment.environment_id === environmentId,
+  );
+  if (!linked) {
+    return c.json(
+      { error: "Environment is not linked to this task", code: "environment_mismatch" },
+      409,
+    );
+  }
+  return c.json(await destroyTestEnvironment(environmentId));
+});
+
+tasksRouter.get("/:id/test-environments/:environmentId/evidence", async (c) => {
+  const { id, environmentId } = c.req.param();
+  const evidencePath = c.req.query("path");
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  if (!evidencePath) return c.json({ error: "Evidence path is required" }, 400);
+  const environment = (await findTaskTestEnvironments(id)).find(
+    (candidate) => candidate.environment_id === environmentId,
+  );
+  if (!environment || !environment.evidence.includes(evidencePath)) {
+    return c.json({ error: "Evidence is not linked to this task", code: "evidence_mismatch" }, 404);
+  }
+  try {
+    const evidence = await readTestbenchEvidence(environmentId, evidencePath);
+    c.header("Content-Type", evidence.contentType);
+    c.header("Cache-Control", "no-store");
+    return new Response(evidence.buffer, { headers: c.res.headers });
+  } catch {
+    return c.json({ error: "Evidence file is unavailable", code: "evidence_unavailable" }, 404);
+  }
+});
+
+tasksRouter.post("/:id/save-qa-report", async (c) => {
+  const { id } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+  if (!canMutateTask(c, id)) return c.json({ error: "Forbidden", code: "forbidden" }, 403);
+  if (task.taskKind !== "qa") {
+    return c.json({ error: "Only QA tasks can save QA reports", code: "not_qa_task" }, 409);
+  }
+  const project = findProjectById(task.projectId);
+  if (!project) return c.json({ error: "Project not found", code: "project_not_found" }, 404);
+  try {
+    return c.json(
+      await saveQaReport({
+        projectRoot: task.worktreePath ?? project.rootPath,
+        taskId: id,
+      }),
+    );
+  } catch (error) {
+    log.warn({ taskId: id, error }, "Failed to save QA report");
+    return c.json({ error: error instanceof Error ? error.message : "Save failed" }, 409);
+  }
+});
+
 // GET /tasks/:id/attachments/:filename — download a task attachment
 tasksRouter.get("/:id/attachments/:filename", async (c) => {
   const { id, filename } = c.req.param();
@@ -942,6 +1077,17 @@ tasksRouter.put("/:id", jsonValidator(updateTaskSchema), async (c) => {
   }
 
   const { plan, attachments: incomingAttachments, ...updatePayload } = body;
+  if (updatePayload.taskKind !== undefined) {
+    updatePayload.isFix = updatePayload.taskKind === "fix";
+    if (updatePayload.taskKind === "qa") {
+      updatePayload.useSubagents = false;
+      updatePayload.skipReview = true;
+      updatePayload.planTests = true;
+      updatePayload.runPostVerify = true;
+    }
+  } else if (updatePayload.isFix !== undefined) {
+    updatePayload.taskKind = updatePayload.isFix ? "fix" : "standard";
+  }
   const effectiveUseSubagents = updatePayload.useSubagents ?? existing.useSubagents;
   if (effectiveUseSubagents) {
     updatePayload.runPlanImprove = false;

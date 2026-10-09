@@ -27,6 +27,7 @@ const updateTaskInputSchema: Record<string, z.ZodTypeAny> = {
   plan: z.string().nullable().optional().describe("Plan content (null to clear)"),
   autoMode: z.boolean().optional().describe("Enable/disable auto mode"),
   isFix: z.boolean().optional().describe("Mark/unmark as fix"),
+  taskKind: z.enum(["standard", "fix", "qa"]).optional().describe("Task workflow kind"),
   plannerMode: z.enum(["fast", "full"]).optional().describe("Planner mode"),
   planDocs: z.boolean().optional().describe("Include documentation in plan"),
   planTests: z.boolean().optional().describe("Include tests in plan"),
@@ -63,6 +64,7 @@ type UpdateTaskArgs = {
   description?: string;
   implementationLog?: string | null;
   isFix?: boolean;
+  taskKind?: "standard" | "fix" | "qa";
   maxReviewIterations?: number;
   modelOverride?: string | null;
   paused?: boolean;
@@ -135,6 +137,11 @@ export function register(server: McpServer, context: ToolContext): void {
 
         // Extract taskId, pass remaining fields to updateTask
         const { taskId, ...fields } = args;
+        if (fields.taskKind !== undefined) {
+          fields.isFix = fields.taskKind === "fix";
+        } else if (fields.isFix !== undefined) {
+          fields.taskKind = fields.isFix ? "fix" : "standard";
+        }
 
         // Build a summary of changed fields for logging
         const changedFields = Object.keys(fields).filter(

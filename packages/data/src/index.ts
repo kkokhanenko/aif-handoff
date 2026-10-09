@@ -259,6 +259,8 @@ export type TaskFieldsUpdate = {
   priority?: number;
   autoMode?: boolean;
   isFix?: boolean;
+  taskKind?: "standard" | "fix" | "qa";
+  qaVerdict?: "pass" | "fail" | "blocked" | "error" | null;
   plannerMode?: string;
   planPath?: string;
   planDocs?: boolean;
@@ -865,7 +867,7 @@ type TaskListItemRow = Pick<TaskRow,
   | "id" | "projectId" | "title" | "description" | "status" | "priority" | "position"
   | "autoMode" | "executionOwner" | "ownershipRevision"
   | "skipReview" | "runPostVerify"
-  | "isFix" | "paused" | "roadmapAlias" | "tags"
+  | "isFix" | "taskKind" | "qaVerdict" | "paused" | "roadmapAlias" | "tags"
   | "runtimeProfileId" | "modelOverride"
   | "blockedReason" | "blockedFromStatus" | "retryAfter" | "retryCount"
   | "reworkRequested" | "reviewIterationCount" | "maxReviewIterations" | "manualReviewRequired"
@@ -888,6 +890,8 @@ const TASK_LIST_COLUMNS = {
   skipReview: tasks.skipReview,
   runPostVerify: tasks.runPostVerify,
   isFix: tasks.isFix,
+  taskKind: tasks.taskKind,
+  qaVerdict: tasks.qaVerdict,
   paused: tasks.paused,
   roadmapAlias: tasks.roadmapAlias,
   tags: tasks.tags,
@@ -1015,7 +1019,7 @@ export type TaskSummaryRow = Pick<TaskRow,
   | "id" | "projectId" | "title" | "status" | "priority" | "position"
   | "autoMode" | "executionOwner" | "ownershipRevision"
   | "skipReview" | "runPostVerify"
-  | "isFix" | "paused" | "roadmapAlias" | "tags"
+  | "isFix" | "taskKind" | "qaVerdict" | "paused" | "roadmapAlias" | "tags"
   | "runtimeProfileId" | "modelOverride"
   | "blockedReason" | "blockedFromStatus" | "retryAfter" | "retryCount"
   | "reworkRequested" | "reviewIterationCount" | "maxReviewIterations" | "manualReviewRequired"
@@ -1036,6 +1040,8 @@ const SUMMARY_COLUMNS = {
   skipReview: tasks.skipReview,
   runPostVerify: tasks.runPostVerify,
   isFix: tasks.isFix,
+  taskKind: tasks.taskKind,
+  qaVerdict: tasks.qaVerdict,
   paused: tasks.paused,
   roadmapAlias: tasks.roadmapAlias,
   tags: tasks.tags,
@@ -1206,6 +1212,7 @@ export function createTask(input: {
   assigneeIds?: string[];
   actor?: AuditActor;
   isFix?: boolean;
+  taskKind?: "standard" | "fix" | "qa";
   plannerMode?: string;
   planPath?: string;
   planDocs?: boolean;
@@ -1306,6 +1313,7 @@ export function createTask(input: {
       executionOwner,
       ownershipRevision: 0,
       isFix: input.isFix,
+      taskKind: input.taskKind ?? (input.isFix ? "fix" : "standard"),
       plannerMode: input.plannerMode,
       planPath: resolvedPlanPath,
       planDocs: input.planDocs,

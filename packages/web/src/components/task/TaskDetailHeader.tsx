@@ -19,7 +19,8 @@ export type TaskDetailTab =
   | "comments"
   | "executors"
   | "activity"
-  | "qa";
+  | "qa"
+  | "evidence";
 
 type TaskActionButton = {
   label: string;
@@ -140,6 +141,7 @@ export function TaskDetailHeader({
     { value: "executors", label: "Executors" },
     { value: "activity", label: "Activity" },
     ...(qaPipelineEnabled ? [{ value: "qa", label: "QA" }] : []),
+    ...(task.taskKind === "qa" ? [{ value: "evidence", label: "Evidence" }] : []),
   ];
   const runtimeLimitDisplay = usageLimitsEnabled
     ? getRuntimeLimitDisplay(task.runtimeLimitSnapshot, {
