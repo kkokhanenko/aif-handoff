@@ -23,6 +23,7 @@ interface Props {
 }
 
 const DEFAULT_PLAN_PATH = ".ai-factory/PLAN.md";
+const DEFAULT_PLAN_DOCS = true;
 
 export function AddTaskForm({ projectId }: Props) {
   const [isOpen, setIsOpen] = useState(false);
@@ -36,7 +37,7 @@ export function AddTaskForm({ projectId }: Props) {
   const [plannerMode, setPlannerMode] = useState<"full" | "fast">("fast");
   const [planPath, setPlanPath] = useState(DEFAULT_PLAN_PATH);
   const initialFlagDefaults = defaultsForMode("fast");
-  const [planDocs, setPlanDocs] = useState(initialFlagDefaults.planDocs);
+  const [planDocs, setPlanDocs] = useState(DEFAULT_PLAN_DOCS);
   const [planTests, setPlanTests] = useState(initialFlagDefaults.planTests);
   const [skipReview, setSkipReview] = useState(initialFlagDefaults.skipReview);
   const [useSubagents, setUseSubagents] = useState(false);
@@ -104,11 +105,12 @@ export function AddTaskForm({ projectId }: Props) {
     setRuntimeProfileId("");
     setModelOverride("");
     setPriority(0);
-    // Apply mode-driven flag defaults; isParallel forces full mode defaults.
+    // Apply mode-driven workflow defaults; documentation is an independent,
+    // user-visible task choice and stays enabled for every newly opened form.
     const seededMode = isParallel ? "full" : plannerMode;
     const flags = defaultsForMode(seededMode);
     setSkipReview(flags.skipReview);
-    setPlanDocs(flags.planDocs);
+    setPlanDocs(DEFAULT_PLAN_DOCS);
     setPlanTests(flags.planTests);
   }, [defaultPlanPath, isParallel, maxReviewIterationsDefault, plannerMode, useSubagentsDefault]);
 
@@ -124,7 +126,7 @@ export function AddTaskForm({ projectId }: Props) {
     setPlannerMode("fast");
     setPlanPath(defaultPlanPath);
     const resetFlags = defaultsForMode("fast");
-    setPlanDocs(resetFlags.planDocs);
+    setPlanDocs(DEFAULT_PLAN_DOCS);
     setPlanTests(resetFlags.planTests);
     setSkipReview(resetFlags.skipReview);
     setUseSubagents(useSubagentsDefault);
@@ -178,7 +180,6 @@ export function AddTaskForm({ projectId }: Props) {
     syncPlanPath(title, mode);
     const flags = defaultsForMode(mode);
     setSkipReview(flags.skipReview);
-    setPlanDocs(flags.planDocs);
     setPlanTests(flags.planTests);
   };
 
@@ -316,6 +317,20 @@ export function AddTaskForm({ projectId }: Props) {
             }
           </span>
         </label>
+        <label className="flex items-start gap-2 text-xs text-muted-foreground">
+          <Checkbox
+            aria-label="Keep documentation current"
+            checked={planDocs}
+            onChange={(e) => setPlanDocs(e.target.checked)}
+            className="mt-0.5 h-3.5 w-3.5"
+          />
+          <span>
+            <span className="font-medium text-foreground">Keep documentation current</span>
+            {
+              " - Update affected documentation when needed. Turn off when the task has no documentation impact."
+            }
+          </span>
+        </label>
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-foreground">Priority</span>
           <Select
@@ -358,8 +373,6 @@ export function AddTaskForm({ projectId }: Props) {
               }}
               effectivePlanPath={effectivePlanPath}
               defaultPlanPath={defaultPlanPath}
-              planDocs={planDocs}
-              onPlanDocsChange={setPlanDocs}
               planTests={planTests}
               onPlanTestsChange={setPlanTests}
             />

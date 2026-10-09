@@ -484,8 +484,8 @@ describe("AddTaskForm", () => {
     // Toggle through both planner modes to cover both onChange branches
     fireEvent.click(screen.getByLabelText("Full"));
     fireEvent.click(screen.getByLabelText("Fast"));
-    // Re-enable docs/tests after fast-mode reset flipped them off
-    fireEvent.click(screen.getByLabelText("Docs"));
+    // Re-enable tests after fast-mode reset flipped them off. Documentation is
+    // an independent task choice and remains enabled.
     fireEvent.click(screen.getByLabelText("Tests"));
     fireEvent.change(screen.getByPlaceholderText(".ai-factory/PLAN.md"), {
       target: { value: ".ai-factory/custom-plan.md" },
@@ -520,7 +520,7 @@ describe("AddTaskForm", () => {
     );
   });
 
-  it("uses fast-mode flag defaults by default (skipReview=true, planDocs=false, planTests=false)", () => {
+  it("keeps documentation enabled by default in fast mode", () => {
     render(<AddTaskForm projectId="p-1" />);
     fireEvent.click(screen.getByText("Add task"));
     fireEvent.change(screen.getByPlaceholderText("Task title"), {
@@ -531,14 +531,14 @@ describe("AddTaskForm", () => {
       expect.objectContaining({
         plannerMode: "fast",
         skipReview: true,
-        planDocs: false,
+        planDocs: true,
         planTests: false,
       }),
       expect.any(Object),
     );
   });
 
-  it("flips flags to full-mode defaults when switching to Full, and back to fast defaults on Fast", () => {
+  it("changes workflow defaults by planner mode without disabling documentation", () => {
     render(<AddTaskForm projectId="p-1" />);
     fireEvent.click(screen.getByText("Add task"));
     fireEvent.click(screen.getByRole("button", { name: "Planner settings" }));
@@ -572,9 +572,49 @@ describe("AddTaskForm", () => {
       expect.objectContaining({
         plannerMode: "fast",
         skipReview: true,
-        planDocs: false,
+        planDocs: true,
         planTests: false,
       }),
+      expect.any(Object),
+    );
+  });
+
+  it("allows documentation updates to be disabled for a specific task", () => {
+    render(<AddTaskForm projectId="p-1" />);
+    fireEvent.click(screen.getByText("Add task"));
+
+    const docsCheckbox = screen.getByLabelText("Keep documentation current");
+    expect(docsCheckbox).toBeChecked();
+    fireEvent.click(docsCheckbox);
+
+    fireEvent.change(screen.getByPlaceholderText("Task title"), {
+      target: { value: "Task without documentation" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(mutateCreateTask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Task without documentation",
+        planDocs: false,
+      }),
+      expect.any(Object),
+    );
+  });
+
+  it("preserves the documentation choice when the planner mode changes", () => {
+    render(<AddTaskForm projectId="p-1" />);
+    fireEvent.click(screen.getByText("Add task"));
+    fireEvent.click(screen.getByLabelText("Keep documentation current"));
+    fireEvent.click(screen.getByRole("button", { name: "Planner settings" }));
+    fireEvent.click(screen.getByLabelText("Full"));
+    fireEvent.click(screen.getByLabelText("Fast"));
+    fireEvent.change(screen.getByPlaceholderText("Task title"), {
+      target: { value: "Mode-independent documentation choice" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(mutateCreateTask).toHaveBeenCalledWith(
+      expect.objectContaining({ planDocs: false }),
       expect.any(Object),
     );
   });

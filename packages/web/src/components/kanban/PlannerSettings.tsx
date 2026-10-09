@@ -10,8 +10,6 @@ interface PlannerSettingsProps {
   onPlanPathChange: (value: string) => void;
   effectivePlanPath: string;
   defaultPlanPath: string;
-  planDocs: boolean;
-  onPlanDocsChange: (v: boolean) => void;
   planTests: boolean;
   onPlanTestsChange: (v: boolean) => void;
 }
@@ -24,8 +22,6 @@ export function PlannerSettings({
   onPlanPathChange,
   effectivePlanPath,
   defaultPlanPath,
-  planDocs,
-  onPlanDocsChange,
   planTests,
   onPlanTestsChange,
 }: PlannerSettingsProps) {
@@ -87,14 +83,6 @@ export function PlannerSettings({
         )}
       </div>
       <div className="flex gap-4">
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Checkbox
-            checked={planDocs}
-            onChange={(e) => onPlanDocsChange(e.target.checked)}
-            className="h-3.5 w-3.5"
-          />
-          <span className="font-medium text-foreground">Docs</span>
-        </label>
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Checkbox
             checked={planTests}
