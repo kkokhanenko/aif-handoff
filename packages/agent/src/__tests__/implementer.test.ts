@@ -320,7 +320,7 @@ describe("runImplementer rework behavior", () => {
     expect(updatedTask?.implementationLog).toBe("Implementation done");
   });
 
-  it("does not fail when checkbox Task checklist remains pending after auto-sync", async () => {
+  it("blocks before Verify when checkbox Task checklist remains pending after auto-sync", async () => {
     const db = testDb.current;
     queryMock
       .mockReturnValueOnce(streamSuccess("Implementation done"))
@@ -338,7 +338,10 @@ describe("runImplementer rework behavior", () => {
       })
       .run();
 
-    await expect(runImplementer("task-5", projectRoot)).resolves.toBeUndefined();
+    await expect(runImplementer("task-5", projectRoot)).rejects.toMatchObject({
+      name: "StageManualBlockError",
+      blockedReason: expect.stringContaining("unfinished plan item"),
+    });
 
     const updatedTask = db.select().from(tasks).where(eq(tasks.id, "task-5")).get();
     expect(updatedTask?.implementationLog).toContain("Implementation done");

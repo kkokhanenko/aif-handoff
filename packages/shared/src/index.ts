@@ -1,6 +1,7 @@
 // Schema
 export {
   projects,
+  projectTestCredentials,
   appSettings,
   participants,
   participantSessions,
@@ -25,6 +26,8 @@ export {
 export type {
   ProjectRow,
   NewProjectRow,
+  ProjectTestCredentialRow,
+  NewProjectTestCredentialRow,
   AppSettingsRow,
   NewAppSettingsRow,
   ParticipantRow,
@@ -86,6 +89,10 @@ export {
   type AutoReviewFinding,
   type AutoReviewState,
   type Project,
+  type ProjectTestCredential,
+  type ProjectTestCredentialAuthType,
+  type CreateProjectTestCredentialInput,
+  type UpdateProjectTestCredentialInput,
   type GitHubEligibility,
   type GitHubRepositoryConnection,
   type GitHubIssueCommentSnapshot,

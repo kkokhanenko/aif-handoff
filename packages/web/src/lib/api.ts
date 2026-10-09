@@ -33,6 +33,9 @@ import type {
   GitHubEligibility,
   GitHubIssueLink,
   GitHubRepositoryConnection,
+  ProjectTestCredential,
+  CreateProjectTestCredentialInput,
+  UpdateProjectTestCredentialInput,
 } from "@aif/shared/browser";
 
 export class ApiError extends Error {
@@ -536,6 +539,43 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(input),
     });
+  },
+
+  listProjectTestCredentials(projectId: string): Promise<ProjectTestCredential[]> {
+    return request(`/projects/${encodeURIComponent(projectId)}/test-credentials`);
+  },
+
+  createProjectTestCredential(
+    projectId: string,
+    input: CreateProjectTestCredentialInput,
+  ): Promise<ProjectTestCredential> {
+    return request(`/projects/${encodeURIComponent(projectId)}/test-credentials`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  },
+
+  updateProjectTestCredential(
+    projectId: string,
+    credentialId: string,
+    input: UpdateProjectTestCredentialInput,
+  ): Promise<ProjectTestCredential> {
+    return request(
+      `/projects/${encodeURIComponent(projectId)}/test-credentials/${encodeURIComponent(credentialId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      },
+    );
+  },
+
+  deleteProjectTestCredential(projectId: string, credentialId: string): Promise<void> {
+    return request(
+      `/projects/${encodeURIComponent(projectId)}/test-credentials/${encodeURIComponent(credentialId)}`,
+      {
+        method: "DELETE",
+      },
+    );
   },
 
   updateProjectOrganization(id: string, input: UpdateProjectOrganizationInput): Promise<Project> {

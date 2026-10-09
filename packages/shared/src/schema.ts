@@ -41,6 +41,31 @@ export const projects = sqliteTable("projects", {
 export type ProjectRow = typeof projects.$inferSelect;
 export type NewProjectRow = typeof projects.$inferInsert;
 
+export const projectTestCredentials = sqliteTable("project_test_credentials", {
+  id: text("id")
+    .primaryKey()
+    .$defaultFn(() => crypto.randomUUID()),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  authType: text("auth_type").notNull().default("form"),
+  loginUrl: text("login_url"),
+  username: text("username"),
+  secretCiphertext: text("secret_ciphertext").notNull(),
+  secretIv: text("secret_iv").notNull(),
+  secretTag: text("secret_tag").notNull(),
+  createdAt: text("created_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  updatedAt: text("updated_at")
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});
+
+export type ProjectTestCredentialRow = typeof projectTestCredentials.$inferSelect;
+export type NewProjectTestCredentialRow = typeof projectTestCredentials.$inferInsert;
+
 export const appSettings = sqliteTable("app_settings", {
   id: integer("id").primaryKey().notNull().default(1),
   defaultTaskRuntimeProfileId: text("default_task_runtime_profile_id"),

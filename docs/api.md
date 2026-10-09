@@ -325,6 +325,19 @@ accept `githubRepository` and never clones a repository.
 
 **Response:** `200 OK` — the updated project object.
 
+### Project Test Credentials
+
+`GET /projects/:id/test-credentials` lists credential metadata. `POST` to the
+same path creates a record with `name`, `authType`, optional `loginUrl`, optional
+`username`, and required `secret`. `PATCH
+/projects/:id/test-credentials/:credentialId` updates metadata and replaces the
+secret only when a non-empty `secret` is supplied. `DELETE` removes it.
+
+Secrets are AES-256-GCM encrypted using `AIF_PROJECT_CREDENTIALS_KEY`; responses
+never contain plaintext or ciphertext. Missing/invalid key configuration returns
+`503`, duplicate reference names return `409`, and unknown resources return
+`404`.
+
 ### Update Project Organization
 
 ```

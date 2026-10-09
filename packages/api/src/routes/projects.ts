@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { jsonValidator } from "../middleware/zodValidator.js";
 import { internalBroadcastAuth } from "../middleware/internalBroadcastAuth.js";
 import { logger, getEnv, getProjectConfig } from "@aif/shared";
@@ -24,6 +24,8 @@ import {
   warmupCreateSchema,
   updateProjectSchema,
   updateProjectOrganizationSchema,
+  createProjectTestCredentialSchema,
+  updateProjectTestCredentialSchema,
 } from "../schemas.js";
 import { getAutoQueueMode, setAutoQueueMode } from "@aif/data";
 import { broadcast } from "../ws.js";
@@ -51,6 +53,13 @@ import {
   runApiRuntimeOneShot,
   type ApiWarmupSupport,
 } from "../services/runtime.js";
+import {
+  ProjectTestCredentialError,
+  createProjectTestCredential,
+  deleteProjectTestCredential,
+  listProjectTestCredentials,
+  updateProjectTestCredential,
+} from "@aif/data";
 
 const log = logger("projects-route");
 
@@ -289,6 +298,55 @@ projectsRouter.put("/:id", jsonValidator(updateProjectSchema), async (c) => {
 
   log.debug({ projectId: id }, "Project updated");
   return c.json(updated);
+});
+
+function credentialErrorResponse(c: Context, error: unknown) {
+  if (!(error instanceof ProjectTestCredentialError)) throw error;
+  const status = error.code === "not_found" ? 404 : error.code === "duplicate" ? 409 : 503;
+  return c.json({ error: error.message, code: error.code }, status);
+}
+
+projectsRouter.get("/:id/test-credentials", (c) => {
+  const { id } = c.req.param();
+  if (!findProjectById(id)) return c.json({ error: "Project not found" }, 404);
+  return c.json(listProjectTestCredentials(id));
+});
+
+projectsRouter.post(
+  "/:id/test-credentials",
+  jsonValidator(createProjectTestCredentialSchema),
+  (c) => {
+    const { id } = c.req.param();
+    if (!findProjectById(id)) return c.json({ error: "Project not found" }, 404);
+    try {
+      return c.json(createProjectTestCredential(id, c.req.valid("json")), 201);
+    } catch (error) {
+      return credentialErrorResponse(c, error);
+    }
+  },
+);
+
+projectsRouter.patch(
+  "/:id/test-credentials/:credentialId",
+  jsonValidator(updateProjectTestCredentialSchema),
+  (c) => {
+    const { id, credentialId } = c.req.param();
+    if (!findProjectById(id)) return c.json({ error: "Project not found" }, 404);
+    try {
+      return c.json(updateProjectTestCredential(id, credentialId, c.req.valid("json")));
+    } catch (error) {
+      return credentialErrorResponse(c, error);
+    }
+  },
+);
+
+projectsRouter.delete("/:id/test-credentials/:credentialId", (c) => {
+  const { id, credentialId } = c.req.param();
+  if (!findProjectById(id)) return c.json({ error: "Project not found" }, 404);
+  if (!deleteProjectTestCredential(id, credentialId)) {
+    return c.json({ error: "Credential not found" }, 404);
+  }
+  return c.body(null, 204);
 });
 
 // PATCH /projects/:id/organization - update picker organization metadata

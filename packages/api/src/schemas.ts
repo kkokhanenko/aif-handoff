@@ -110,6 +110,30 @@ export const updateProjectSchema = projectSettingsSchema.extend({
   rootPath: z.string().min(1, "Root path is required"),
 });
 
+const projectTestCredentialFields = {
+  name: z.string().trim().min(1).max(100),
+  authType: z.enum(["form", "basic", "token"]),
+  loginUrl: z.string().trim().max(2_000).nullable().optional(),
+  username: z.string().trim().max(500).nullable().optional(),
+};
+
+export const createProjectTestCredentialSchema = z.object({
+  ...projectTestCredentialFields,
+  secret: z.string().min(1).max(10_000),
+});
+
+export const updateProjectTestCredentialSchema = z
+  .object({
+    name: projectTestCredentialFields.name.optional(),
+    authType: projectTestCredentialFields.authType.optional(),
+    loginUrl: projectTestCredentialFields.loginUrl,
+    username: projectTestCredentialFields.username,
+    secret: z.string().min(1).max(10_000).optional(),
+  })
+  .refine((input) => Object.keys(input).length > 0, {
+    message: "At least one credential field is required",
+  });
+
 export const githubConnectSchema = z.object({
   repository: githubRepositorySchema,
   tokenEnvVar: z

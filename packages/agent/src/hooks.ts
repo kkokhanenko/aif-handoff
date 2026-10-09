@@ -5,7 +5,7 @@ import {
   isTaskAttemptCurrent,
   type TaskAttempt,
 } from "@aif/data";
-import { logger, findMonorepoRootFromUrl, getEnv } from "@aif/shared";
+import { logger, findMonorepoRootFromUrl, getEnv, redactProviderTextForLogs } from "@aif/shared";
 import { notifyTaskBroadcast } from "./notifier.js";
 
 const log = logger("agent-hooks");
@@ -225,7 +225,9 @@ function summarizeToolInput(
 
   switch (toolName) {
     case "Bash": {
-      const cmd = sanitizeForActivityLog(String(toolInput.command ?? ""));
+      const cmd = sanitizeForActivityLog(
+        redactProviderTextForLogs(String(toolInput.command ?? "")),
+      );
       return cmd ? ` \`${cmd}\`` : "";
     }
     case "Read":
@@ -263,7 +265,9 @@ function buildHookLogContext(data: Record<string, unknown>): Record<string, unkn
           file_path: toolInput.file_path,
           pattern: toolInput.pattern,
           command:
-            typeof toolInput.command === "string" ? toolInput.command.slice(0, 200) : undefined,
+            typeof toolInput.command === "string"
+              ? redactProviderTextForLogs(toolInput.command).slice(0, 200)
+              : undefined,
         }
       : undefined,
     tool_response: toolResponse

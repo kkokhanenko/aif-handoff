@@ -82,6 +82,36 @@ export interface Project {
   updatedAt: string;
 }
 
+export type ProjectTestCredentialAuthType = "form" | "basic" | "token";
+
+export interface ProjectTestCredential {
+  id: string;
+  projectId: string;
+  name: string;
+  authType: ProjectTestCredentialAuthType;
+  loginUrl: string | null;
+  username: string | null;
+  hasSecret: true;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateProjectTestCredentialInput {
+  name: string;
+  authType: ProjectTestCredentialAuthType;
+  loginUrl?: string | null;
+  username?: string | null;
+  secret: string;
+}
+
+export interface UpdateProjectTestCredentialInput {
+  name?: string;
+  authType?: ProjectTestCredentialAuthType;
+  loginUrl?: string | null;
+  username?: string | null;
+  secret?: string;
+}
+
 export interface GitHubEligibility {
   labels: string[];
   assignee: string | null;

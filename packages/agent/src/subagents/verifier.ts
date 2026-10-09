@@ -5,6 +5,7 @@ import { assertCurrentBranch, restorePersistedBranch } from "../gitBranch.js";
 import { logActivity } from "../hooks.js";
 import { StageManualBlockError } from "../stageErrorHandler.js";
 import { executeSubagentQuery } from "../subagentQuery.js";
+import { materializeProjectTestCredentialContext } from "../projectTestCredentialContext.js";
 
 const log = logger("verifier");
 
@@ -146,9 +147,11 @@ Task description: ${task.description}`;
   let autoFixAttempts = 0;
 
   while (true) {
+    const credentialContext = materializeProjectTestCredentialContext(task.projectId);
+    const verifyPromptWithCredentials = `${verifyPrompt}${credentialContext.prompt}`;
     const verifyWorkflowSpec = createRuntimeWorkflowSpec({
       workflowKind: "verifier",
-      prompt: verifyPrompt,
+      prompt: verifyPromptWithCredentials,
       requiredCapabilities: [],
       fallbackSlashCommand: verifySlashCommand,
       fallbackStrategy: "slash_command",
@@ -156,17 +159,22 @@ Task description: ${task.description}`;
       sessionReusePolicy: "new_session",
       systemPromptAppend: scopeConstraint,
     });
-    const { resultText } = await executeSubagentQuery({
-      taskId,
-      projectRoot,
-      agentName: "aif-verify",
-      prompt: verifyPrompt,
-      profileMode: "review",
-      maxBudgetUsd: sidecarBudget,
-      workflowSpec: verifyWorkflowSpec,
-      workflowKind: "verifier",
-      fallbackSlashCommand: verifySlashCommand,
-    });
+    let resultText: string;
+    try {
+      ({ resultText } = await executeSubagentQuery({
+        taskId,
+        projectRoot,
+        agentName: "aif-verify",
+        prompt: verifyPromptWithCredentials,
+        profileMode: "review",
+        maxBudgetUsd: sidecarBudget,
+        workflowSpec: verifyWorkflowSpec,
+        workflowKind: "verifier",
+        fallbackSlashCommand: verifySlashCommand,
+      }));
+    } finally {
+      credentialContext.cleanup();
+    }
 
     if (task.branchName && !task.isFix) {
       assertCurrentBranch(projectRoot, task.branchName);

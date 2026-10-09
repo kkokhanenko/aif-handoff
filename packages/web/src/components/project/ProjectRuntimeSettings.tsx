@@ -1,9 +1,11 @@
-import { useMemo, useState } from "react";
-import type { Project, RuntimeProfile } from "@aif/shared/browser";
+import { useEffect, useMemo, useState } from "react";
+import type { Project, ProjectTestCredential, RuntimeProfile } from "@aif/shared/browser";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { api } from "@/lib/api";
 import { useUpdateProject } from "@/hooks/useProjects";
 import {
   useAppRuntimeDefaults,
@@ -58,6 +60,12 @@ export function ProjectRuntimeSettings({
   const [creating, setCreating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusVariant, setStatusVariant] = useState<"success" | "error" | "neutral">("neutral");
+  const [testCredentials, setTestCredentials] = useState<ProjectTestCredential[]>([]);
+  const [credentialName, setCredentialName] = useState("");
+  const [credentialLoginUrl, setCredentialLoginUrl] = useState("/bitrix/admin/");
+  const [credentialUsername, setCredentialUsername] = useState("");
+  const [credentialSecret, setCredentialSecret] = useState("");
+  const [credentialSaving, setCredentialSaving] = useState(false);
 
   const updateProject = useUpdateProject();
   const createProfile = useCreateRuntimeProfile();
@@ -116,6 +124,61 @@ export function ProjectRuntimeSettings({
     ? "(app default)"
     : "(env fallback)";
   const deletingProfileIsGlobal = deletingProfile?.projectId == null;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    void api
+      .listProjectTestCredentials(project.id)
+      .then(setTestCredentials)
+      .catch((error) => {
+        setStatusMessage(
+          error instanceof Error ? error.message : "Failed to load test credentials",
+        );
+        setStatusVariant("error");
+      });
+  }, [isOpen, project.id]);
+
+  const handleCreateCredential = async () => {
+    setCredentialSaving(true);
+    setStatusMessage(null);
+    try {
+      const created = await api.createProjectTestCredential(project.id, {
+        name: credentialName,
+        authType: "form",
+        loginUrl: credentialLoginUrl || null,
+        username: credentialUsername || null,
+        secret: credentialSecret,
+      });
+      setTestCredentials((current) =>
+        [...current, created].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setCredentialName("");
+      setCredentialUsername("");
+      setCredentialSecret("");
+      setStatusMessage("Test credential saved securely.");
+      setStatusVariant("success");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to save test credential");
+      setStatusVariant("error");
+    } finally {
+      setCredentialSaving(false);
+    }
+  };
+
+  const handleDeleteCredential = async (credential: ProjectTestCredential) => {
+    setCredentialSaving(true);
+    try {
+      await api.deleteProjectTestCredential(project.id, credential.id);
+      setTestCredentials((current) => current.filter((item) => item.id !== credential.id));
+      setStatusMessage(`Test credential "${credential.name}" deleted.`);
+      setStatusVariant("success");
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : "Failed to delete test credential");
+      setStatusVariant("error");
+    } finally {
+      setCredentialSaving(false);
+    }
+  };
 
   const handleSaveDefaults = async () => {
     setStatusMessage(null);
@@ -361,6 +424,74 @@ export function ProjectRuntimeSettings({
           )}
         </div>
       )}
+
+      <div className="space-y-2 border-t border-border pt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Test credentials
+        </p>
+        <p className="text-[11px] text-muted-foreground">
+          Disposable project-only access for browser tests. Secrets are encrypted and never shown
+          again.
+        </p>
+        {testCredentials.map((credential) => (
+          <div
+            key={credential.id}
+            className="flex items-center justify-between border border-border px-2 py-1.5"
+          >
+            <div>
+              <p className="text-xs font-medium">{credential.name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {credential.username ?? "no username"} · {credential.loginUrl ?? "no login URL"}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={credentialSaving}
+              onClick={() => void handleDeleteCredential(credential)}
+            >
+              Delete
+            </Button>
+          </div>
+        ))}
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            inputSize="sm"
+            placeholder="Reference, e.g. bitrix-test-admin"
+            value={credentialName}
+            onChange={(event) => setCredentialName(event.target.value)}
+          />
+          <Input
+            inputSize="sm"
+            placeholder="Login URL"
+            value={credentialLoginUrl}
+            onChange={(event) => setCredentialLoginUrl(event.target.value)}
+          />
+          <Input
+            inputSize="sm"
+            placeholder="Username"
+            autoComplete="off"
+            value={credentialUsername}
+            onChange={(event) => setCredentialUsername(event.target.value)}
+          />
+          <Input
+            inputSize="sm"
+            type="password"
+            placeholder="Password / token"
+            autoComplete="new-password"
+            value={credentialSecret}
+            onChange={(event) => setCredentialSecret(event.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={credentialSaving || !credentialName.trim() || !credentialSecret}
+          onClick={() => void handleCreateCredential()}
+        >
+          Save test credential
+        </Button>
+      </div>
 
       <div className="space-y-2 border-t border-border pt-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

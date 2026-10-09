@@ -285,6 +285,21 @@ Only non-secret fields are persisted (`baseUrl`, `apiKeyEnvVar`, headers/options
 
 The app-default API surface lives under `GET /settings/runtime-defaults` and `PUT /settings/runtime-defaults`.
 
+## Project Test Credentials
+
+Project Runtime Settings can store named disposable credentials for browser and
+integration tests. Configure `AIF_PROJECT_CREDENTIALS_KEY` as a base64-encoded
+32-byte key before saving the first credential (for example,
+`openssl rand -base64 32`). Keep this key stable: changing it makes existing
+encrypted values unreadable.
+
+Each record has a reference name, login URL, username, authentication type and
+secret. Public API responses return metadata only. During Implement and Verify,
+the agent materializes the decrypted records in a mode-0600 temporary JSON file,
+adds only that file path to the runtime prompt, and removes the file when the
+stage ends. Use the same reference name in Testbench `credential_refs`. Agents
+must not copy credential values into logs, evidence or repository files.
+
 For concrete profile payloads and adapter capability differences, see [Providers](providers.md).
 
 ### Runtime Warmup

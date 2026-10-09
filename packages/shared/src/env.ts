@@ -109,6 +109,7 @@ const envSchema = z.object({
   API_RUNTIME_START_TIMEOUT_MS: z.coerce.number().default(60 * 1000),
   API_RUNTIME_RUN_TIMEOUT_MS: z.coerce.number().default(120 * 1000),
   DATABASE_URL: z.string().default("./data/aif.sqlite"),
+  AIF_PROJECT_CREDENTIALS_KEY: z.string().optional(),
   CORS_ORIGIN: z.string().default("*"),
   PARTICIPANTS_MODE_ENABLED: booleanEnvSchema.default(false),
   PARTICIPANT_SESSION_TTL_SECONDS: z.coerce

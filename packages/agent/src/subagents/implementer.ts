@@ -20,6 +20,8 @@ import { logActivity } from "../hooks.js";
 import { executeSubagentQuery } from "../subagentQuery.js";
 import { computePendingPlanLayers, computePlanLayers } from "../planLayers.js";
 import { assertCurrentBranch, restorePersistedBranch } from "../gitBranch.js";
+import { materializeProjectTestCredentialContext } from "../projectTestCredentialContext.js";
+import { StageManualBlockError } from "../stageErrorHandler.js";
 
 const log = logger("implementer");
 const AGENT_NAME = "implement-coordinator";
@@ -314,6 +316,7 @@ Rework handling protocol:
   // surface the rework header inside the body instead.
   const topReworkHeader = useSubagents ? reworkHeaderBlock : "";
   const bodyReworkHeader = useSubagents ? "" : reworkHeaderBlock;
+  const credentialContext = materializeProjectTestCredentialContext(task.projectId);
 
   const prompt = `${topReworkHeader}${useSubagents ? "Implement the task using the provided plan." : implementSlashCommand}
 
@@ -328,6 +331,7 @@ Do not perform Handoff MCP sync yourself.
 }
 
 ${scopeConstraint}
+${credentialContext.prompt}
 
 ${bodyReworkHeader}Latest executor responsibility: ${handoffResponsibility}
 
@@ -365,18 +369,23 @@ Execution rules:
     },
   });
 
-  const { resultText } = await executeSubagentQuery({
-    taskId,
-    projectRoot,
-    agentName: executionName,
-    prompt,
-    maxBudgetUsd: implementerBudget,
-    agent: useSubagents ? AGENT_NAME : undefined,
-    skipReview: task.skipReview ?? false,
-    workflowSpec,
-    workflowKind: "implementer",
-    fallbackSlashCommand: implementSlashCommand,
-  });
+  let resultText: string;
+  try {
+    ({ resultText } = await executeSubagentQuery({
+      taskId,
+      projectRoot,
+      agentName: executionName,
+      prompt,
+      maxBudgetUsd: implementerBudget,
+      agent: useSubagents ? AGENT_NAME : undefined,
+      skipReview: task.skipReview ?? false,
+      workflowSpec,
+      workflowKind: "implementer",
+      fallbackSlashCommand: implementSlashCommand,
+    }));
+  } finally {
+    credentialContext.cleanup();
+  }
 
   // Post-run drift check: if the subagent switched branches during execution
   // (e.g. a rogue skill ran `git checkout` or plan-polisher followed legacy
@@ -433,7 +442,7 @@ Execution rules:
   if (checklistWarning) {
     log.warn(
       { taskId, pendingTaskCount: checklistAfterSync.pendingTaskCount },
-      "Checklist remains incomplete after auto-sync; continuing without blocking",
+      "Checklist remains incomplete after auto-sync; implementation will block before Verify",
     );
   }
 
@@ -467,6 +476,13 @@ Execution rules:
     lastHeartbeatAt: nowIso,
     updatedAt: nowIso,
   });
+
+  if (checklistAfterSync.parsedTaskCount > 0 && checklistAfterSync.pendingTaskCount > 0) {
+    throw new StageManualBlockError(
+      `Implementation stopped with ${checklistAfterSync.pendingTaskCount} unfinished plan item(s). Review the Implementation log, resolve the external blocker, then retry.`,
+      "Implementation checklist is incomplete",
+    );
+  }
 
   log.debug({ taskId }, "Implementation log saved to task");
 }

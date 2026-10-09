@@ -1102,6 +1102,26 @@ const MIGRATIONS: Migration[] = [
       ALTER TABLE tasks ADD COLUMN stage_started_at TEXT;
     `,
   },
+  {
+    version: 31,
+    description: "Add encrypted project-scoped test credentials",
+    sql: `
+      CREATE TABLE IF NOT EXISTS project_test_credentials (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        auth_type TEXT NOT NULL DEFAULT 'form',
+        login_url TEXT,
+        username TEXT,
+        secret_ciphertext TEXT NOT NULL,
+        secret_iv TEXT NOT NULL,
+        secret_tag TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        UNIQUE(project_id, name)
+      );
+    `,
+  },
 ];
 
 function splitSqlStatements(sqlText: string): string[] {

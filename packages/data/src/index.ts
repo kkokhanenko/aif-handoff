@@ -108,6 +108,15 @@ import { createAuditEventValues } from "./audit.js";
 export * from "./normalizeBacklogPositions.js";
 export * from "./github.js";
 export {
+  ProjectTestCredentialError,
+  createProjectTestCredential,
+  deleteProjectTestCredential,
+  listProjectTestCredentials,
+  resolveProjectTestCredentials,
+  updateProjectTestCredential,
+  type ResolvedProjectTestCredential,
+} from "./projectTestCredentials.js";
+export {
   appendAuditEvent,
   listAuditEvents,
   type AppendAuditEventInput,
