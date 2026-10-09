@@ -41,7 +41,10 @@ export function AgentTimeline({ activityLog }: AgentTimelineProps) {
         <span className="ml-auto text-3xs text-muted-foreground">{visibleEntries.length}</span>
       </div>
 
-      <div ref={scrollRef} className="max-h-64 space-y-2 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="max-h-[60vh] space-y-2 overflow-y-auto md:max-h-none md:overflow-y-visible"
+      >
         {visibleEntries.map((parsed, i) => {
           const badge = kindBadgeStyle(parsed.kind);
 

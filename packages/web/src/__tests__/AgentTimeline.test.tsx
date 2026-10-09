@@ -9,7 +9,7 @@ describe("AgentTimeline", () => {
   });
 
   it("renders parsed tool entries with TOOL badge", () => {
-    render(
+    const { container } = render(
       <AgentTimeline
         activityLog={
           "[2026-01-01T10:00:00.000Z] Tool: Read\n[2026-01-01T10:00:01.000Z] Tool: Write"
@@ -20,6 +20,9 @@ describe("AgentTimeline", () => {
     expect(screen.getAllByText("TOOL")).toHaveLength(2);
     expect(screen.getByText("Read")).toBeDefined();
     expect(screen.getByText("Write")).toBeDefined();
+    expect(container.querySelector(".space-y-2")?.className).toContain("max-h-[60vh]");
+    expect(container.querySelector(".space-y-2")?.className).toContain("md:max-h-none");
+    expect(container.querySelector(".space-y-2")?.className).not.toContain("max-h-64");
   });
 
   it("renders error entries with ERROR badge", () => {

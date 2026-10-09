@@ -84,3 +84,13 @@ docs-html/
 # Attachment files (stored inside project .ai-factory/files/)
 .ai-factory/files/
 .ai-factory/PLAN.md
+
+# SIMAI local working artifacts
+.env.*
+!.env.example
+source/
+output/
+*.bak
+*.bak_*
+*.bak-*
+*.codex-bak-*
