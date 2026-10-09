@@ -37,6 +37,7 @@ describe("runVerifier", () => {
         id: "project-1",
         name: "Test",
         rootPath: "/tmp/verifier-test",
+        implementerMaxBudgetUsd: 5,
         reviewSidecarMaxBudgetUsd: 3,
       })
       .run();
@@ -106,5 +107,170 @@ describe("runVerifier", () => {
     await expect(runVerifier("task-blocked", "/tmp/verifier-test")).rejects.toThrow(
       "Verify stage returned a blocking gate result",
     );
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the exact allowlisted aif-fix remediation and verifies again", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-remediated",
+        projectId: "project-1",
+        title: "Document module",
+        description: "Keep docs aligned with code",
+        status: "verify",
+      })
+      .run();
+
+    executeSubagentQueryMock
+      .mockResolvedValueOnce({
+        resultText:
+          'First verification\n\n```aif-gate-result\n{"status":"fail","blocking":true,"blockers":[{"file":"docs/user-guide.md","summary":"Incorrect behavior"}],"suggested_next":{"command":"/aif-fix","reason":"Correct the documentation"}}\n```',
+      })
+      .mockResolvedValueOnce({ resultText: "Fix applied" })
+      .mockResolvedValueOnce({
+        resultText:
+          'Second verification\n\n```aif-gate-result\n{"status":"pass","blocking":false}\n```',
+      });
+
+    await runVerifier("task-remediated", "/tmp/verifier-test");
+
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(3);
+    const fixCall = executeSubagentQueryMock.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect(fixCall.agentName).toBe("aif-fix");
+    expect(fixCall.profileMode).toBe("task");
+    expect(fixCall.maxBudgetUsd).toBe(5);
+    expect(fixCall.fallbackSlashCommand).toMatch(/^\/aif-fix /);
+    expect(fixCall.prompt).toContain("Fix now. Do not ask interactive questions");
+    expect(fixCall.prompt).toContain("Incorrect behavior");
+    expect(fixCall.workflowSpec).toEqual(
+      expect.objectContaining({
+        executionMode: "standard",
+        sessionReusePolicy: "never",
+      }),
+    );
+
+    const updatedTask = testDb.current
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, "task-remediated"))
+      .get();
+    expect(updatedTask?.reviewComments).toContain("## Verification\n\nFirst verification");
+    expect(updatedTask?.reviewComments).toContain(
+      "## Verification after fix 1\n\nSecond verification",
+    );
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "task-remediated",
+      "Agent",
+      "verify auto-fix 1/2 started (aif-fix)",
+    );
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "task-remediated",
+      "Agent",
+      "verify auto-fix 1/2 complete; rerunning aif-verify",
+    );
+  });
+
+  it("blocks after the bounded aif-fix attempts are exhausted", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-nonconverging",
+        projectId: "project-1",
+        title: "Task",
+        description: "Desc",
+        status: "verify",
+      })
+      .run();
+
+    const blockingResult = {
+      resultText:
+        'Still failing\n\n```aif-gate-result\n{"status":"fail","blocking":true,"suggested_next":{"command":"/aif-fix"}}\n```',
+    };
+    executeSubagentQueryMock
+      .mockResolvedValueOnce(blockingResult)
+      .mockResolvedValueOnce({ resultText: "Fix one" })
+      .mockResolvedValueOnce(blockingResult)
+      .mockResolvedValueOnce({ resultText: "Fix two" })
+      .mockResolvedValueOnce(blockingResult);
+
+    await expect(runVerifier("task-nonconverging", "/tmp/verifier-test")).rejects.toThrow(
+      "Verify stage returned a blocking gate result",
+    );
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(5);
+
+    const updatedTask = testDb.current
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, "task-nonconverging"))
+      .get();
+    expect(updatedTask?.reviewComments).toContain("## Verification after fix 2");
+  });
+
+  it("does not execute unsupported suggested commands", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-unsupported",
+        projectId: "project-1",
+        title: "Task",
+        description: "Desc",
+        status: "verify",
+      })
+      .run();
+
+    executeSubagentQueryMock.mockResolvedValueOnce({
+      resultText:
+        'Verification failed\n\n```aif-gate-result\n{"status":"fail","blocking":true,"suggested_next":{"command":"/aif-rules"}}\n```',
+    });
+
+    await expect(runVerifier("task-unsupported", "/tmp/verifier-test")).rejects.toThrow();
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses only the final structured gate result", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-final-gate",
+        projectId: "project-1",
+        title: "Task",
+        description: "Desc",
+        status: "verify",
+      })
+      .run();
+
+    executeSubagentQueryMock.mockResolvedValueOnce({
+      resultText:
+        'Draft\n```aif-gate-result\n{"status":"fail","blocking":true,"suggested_next":{"command":"/aif-fix"}}\n```\nFinal\n```aif-gate-result\n{"status":"pass","blocking":false}\n```',
+    });
+
+    await runVerifier("task-final-gate", "/tmp/verifier-test");
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks without retrying when aif-fix itself fails", async () => {
+    testDb.current
+      .insert(tasks)
+      .values({
+        id: "task-fix-error",
+        projectId: "project-1",
+        title: "Task",
+        description: "Desc",
+        status: "verify",
+      })
+      .run();
+
+    executeSubagentQueryMock
+      .mockResolvedValueOnce({
+        resultText:
+          'Verification failed\n\n```aif-gate-result\n{"status":"fail","blocking":true,"suggested_next":{"command":"/aif-fix"}}\n```',
+      })
+      .mockRejectedValueOnce(new Error("runtime interrupted"));
+
+    await expect(runVerifier("task-fix-error", "/tmp/verifier-test")).rejects.toThrow(
+      "Verify auto-fix failed",
+    );
+    expect(executeSubagentQueryMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -66,6 +66,7 @@ describe("env validation", () => {
     expect(result.COORDINATOR_MAX_CONCURRENT_PROJECTS).toBe(4);
     expect(result.AGENT_CHAT_MAX_TURNS).toBe(50);
     expect(result.AGENT_MAX_REVIEW_ITERATIONS).toBe(3);
+    expect(result.AGENT_MAX_VERIFY_FIX_ITERATIONS).toBe(2);
     expect(result.AGENT_USE_SUBAGENTS).toBe(false);
     expect(result.AIF_WARMUP_ENABLED).toBe(false);
     expect(result.AIF_STAGE_RUNTIME_PIN_ENABLED).toBe(false);
@@ -124,6 +125,16 @@ describe("env validation", () => {
     expect(validateEnv({ AIF_WARMUP_ENABLED: "1" }).AIF_WARMUP_ENABLED).toBe(true);
     expect(validateEnv({ AIF_WARMUP_ENABLED: "false" }).AIF_WARMUP_ENABLED).toBe(false);
     expect(validateEnv({ AIF_WARMUP_ENABLED: "0" }).AIF_WARMUP_ENABLED).toBe(false);
+  });
+
+  it("should validate the bounded Verify auto-fix limit", () => {
+    expect(
+      validateEnv({ AGENT_MAX_VERIFY_FIX_ITERATIONS: "0" }).AGENT_MAX_VERIFY_FIX_ITERATIONS,
+    ).toBe(0);
+    expect(
+      validateEnv({ AGENT_MAX_VERIFY_FIX_ITERATIONS: "10" }).AGENT_MAX_VERIFY_FIX_ITERATIONS,
+    ).toBe(10);
+    expect(() => validateEnv({ AGENT_MAX_VERIFY_FIX_ITERATIONS: "11" })).toThrow();
   });
 
   it("should parse the Telegram project-name rollout flag", () => {

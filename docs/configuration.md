@@ -470,6 +470,15 @@ Auto-review persists its latest blocking snapshot on the task (`autoReviewState`
 - `closure_first` verifies prior blockers before allowing another autonomous loop.
 - When convergence fails or the iteration limit is reached, the task stays in `review`, execution transfers to a human, and `manualReviewRequired=true`. The API and UI retain that explicit state; a legacy `done` task with the flag also displays a manual-review indicator.
 
+## Verify Remediation
+
+When `/aif-verify` returns a blocking final `aif-gate-result` with the exact allowlisted
+`suggested_next.command` value `/aif-fix`, the verifier runs the fix in the same task
+working tree and then starts a fresh Verify pass. `AGENT_MAX_VERIFY_FIX_ITERATIONS`
+limits this loop and defaults to `2`; set it to `0` to keep all blocking Verify results
+manual. Unsupported commands are never executed. A result that still blocks after the
+limit moves the task to `Blocked` with every Verify report retained in Review comments.
+
 ## Agent Permissions
 
 Subagents (planner, implementer, reviewer) run shell commands during task execution. Permission behaviour is driven by the provider-neutral `AGENT_BYPASS_PERMISSIONS` env flag, which each runtime adapter translates into its native mechanism.

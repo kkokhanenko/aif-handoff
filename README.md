@@ -263,6 +263,12 @@ The coordinator polls every 30 seconds and delegates to `.claude/agents/` defini
 - `AGENT_AUTO_REVIEW_STRATEGY=closure_first` only auto-reworks unresolved previous blockers; if new blockers appear after previous ones are resolved, the coordinator stops and asks for human review.
 - Hitting the review-iteration limit also stops automation in `review`, transfers execution to a human, and sets `manualReviewRequired=true`.
 
+### Verify Remediation
+
+- A blocking final `aif-gate-result` that explicitly suggests `/aif-fix` starts a bounded automatic fix → verify loop in the same task working tree.
+- `AGENT_MAX_VERIFY_FIX_ITERATIONS` controls the maximum fixes (default `2`, `0` disables automatic remediation).
+- Unsupported suggested commands are never executed; non-converging verification moves the task to `Blocked` with all reports preserved.
+
 ### Fault Tolerance
 
 - Task liveness is tracked with `lastHeartbeatAt`.
