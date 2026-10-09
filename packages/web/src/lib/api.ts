@@ -635,6 +635,16 @@ export const api = {
     return request<Task>(`${API_BASE}/${id}`);
   },
 
+  getTaskProjectMarkdown(
+    id: string,
+    path: string,
+    from?: string,
+  ): Promise<{ path: string; content: string }> {
+    const params = new URLSearchParams({ path });
+    if (from) params.set("from", from);
+    return request(`${API_BASE}/${encodeURIComponent(id)}/project-markdown?${params.toString()}`);
+  },
+
   createTask(input: CreateTaskInput): Promise<Task> {
     return request<Task>(API_BASE, {
       method: "POST",

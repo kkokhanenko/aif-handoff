@@ -1,10 +1,15 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "@/lib/utils";
+import {
+  isLocalMarkdownLink,
+  useMarkdownFileLinkHandler,
+} from "@/components/ui/markdown-file-links";
 
 interface MarkdownProps {
   content: string;
   className?: string;
+  sourcePath?: string;
 }
 
 const baseMarkdownClassName =
@@ -15,10 +20,31 @@ function stripHtmlComments(text: string): string {
   return text.replace(/<!--[\s\S]*?-->/g, "");
 }
 
-export function Markdown({ content, className }: MarkdownProps) {
+export function Markdown({ content, className, sourcePath }: MarkdownProps) {
+  const openProjectFile = useMarkdownFileLinkHandler();
+
   return (
     <div className={cn(baseMarkdownClassName, className)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{stripHtmlComments(content)}</ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          a: ({ href, children, node: _node, ...props }) => (
+            <a
+              {...props}
+              href={href}
+              onClick={(event) => {
+                if (!openProjectFile || !isLocalMarkdownLink(href)) return;
+                event.preventDefault();
+                openProjectFile({ href, sourcePath });
+              }}
+            >
+              {children}
+            </a>
+          ),
+        }}
+      >
+        {stripHtmlComments(content)}
+      </ReactMarkdown>
     </div>
   );
 }

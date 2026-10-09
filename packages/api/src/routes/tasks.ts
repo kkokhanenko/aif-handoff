@@ -63,6 +63,7 @@ import {
 } from "@aif/data";
 import { validateProjectScopedRuntimeProfileSelections } from "../services/runtimeProfileScope.js";
 import { getParticipantAuth, type ParticipantApiEnv } from "../middleware/participantAuth.js";
+import { ProjectMarkdownError, readProjectMarkdown } from "../services/projectMarkdown.js";
 
 const log = logger("tasks-route");
 const QA_LOCK_DURATION_MS =
@@ -744,6 +745,36 @@ tasksRouter.get("/:id", (c) => {
 
   log.debug({ taskId: id }, "Task fetched");
   return c.json(toTaskRouteResponse(task, undefined, undefined, requestActionContext(c)));
+});
+
+// GET /tasks/:id/project-markdown — preview a Markdown file inside the task execution root
+tasksRouter.get("/:id/project-markdown", (c) => {
+  const { id } = c.req.param();
+  const task = findTaskById(id);
+  if (!task) return c.json({ error: "Task not found", code: "task_not_found" }, 404);
+
+  const project = findProjectById(task.projectId);
+  if (!project) return c.json({ error: "Project not found", code: "project_not_found" }, 404);
+
+  const requestedPath = c.req.query("path");
+  if (!requestedPath) {
+    return c.json({ error: "Markdown path is required", code: "invalid_project_file_path" }, 400);
+  }
+
+  try {
+    const document = readProjectMarkdown(
+      task.worktreePath ?? project.rootPath,
+      requestedPath,
+      c.req.query("from"),
+    );
+    c.header("Cache-Control", "no-store");
+    return c.json(document);
+  } catch (error) {
+    if (error instanceof ProjectMarkdownError) {
+      return c.json({ error: error.message, code: error.code }, error.status);
+    }
+    throw error;
+  }
 });
 
 // GET /tasks/:id/attachments/:filename — download a task attachment

@@ -61,6 +61,16 @@ describe("api client", () => {
     expect(String(url)).toContain("/projects/overview");
   });
 
+  it("encodes project Markdown path and source path", async () => {
+    await api.getTaskProjectMarkdown("task 1", "../docs/guide.md#setup", "notes/index.md");
+
+    const fetchMock = vi.mocked(fetch);
+    const [url] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/tasks/task%201/project-markdown?");
+    expect(String(url)).toContain("path=..%2Fdocs%2Fguide.md%23setup");
+    expect(String(url)).toContain("from=notes%2Findex.md");
+  });
+
   it("updates project organization with PATCH", async () => {
     await api.getAuthSession();
     const fetchMock = vi.mocked(fetch);

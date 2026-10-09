@@ -24,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { HandoffDialog } from "./TaskOwnership";
 import { ExecutorTimeline } from "./ExecutorTimeline";
+import { ProjectMarkdownViewer } from "./ProjectMarkdownViewer";
 
 interface TaskDetailProps {
   taskId: string | null;
@@ -48,7 +49,7 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
   const activeTab: TaskDetailTab = selectedTab ?? defaultTab;
 
   return (
-    <>
+    <ProjectMarkdownViewer taskId={taskId}>
       <Sheet open={!!taskId} onOpenChange={() => onClose()}>
         <SheetContent className="w-full overflow-hidden p-0 md:w-[88vw] md:max-w-none">
           {task && (
@@ -419,6 +420,6 @@ export function TaskDetail({ taskId, onClose }: TaskDetailProps) {
           onOpenChange={setShowHandoffDialog}
         />
       )}
-    </>
+    </ProjectMarkdownViewer>
   );
 }
