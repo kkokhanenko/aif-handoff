@@ -6,6 +6,11 @@ import { logActivity } from "../hooks.js";
 import { StageManualBlockError } from "../stageErrorHandler.js";
 import { executeSubagentQuery } from "../subagentQuery.js";
 import { materializeProjectTestCredentialContext } from "../projectTestCredentialContext.js";
+import {
+  ensureQaTestEnvironment,
+  formatQaTestEnvironmentContext,
+  TestbenchLifecycleError,
+} from "../testbenchLifecycle.js";
 
 const log = logger("verifier");
 
@@ -140,6 +145,23 @@ export async function runVerifier(taskId: string, projectRoot: string): Promise<
   const sidecarBudget = project?.reviewSidecarMaxBudgetUsd ?? null;
   const implementerBudget = project?.implementerMaxBudgetUsd ?? null;
   const maxAutoFixAttempts = getEnv().AGENT_MAX_VERIFY_FIX_ITERATIONS;
+  let qaTestEnvironmentContext = "";
+  if (task.taskKind === "qa") {
+    try {
+      qaTestEnvironmentContext = formatQaTestEnvironmentContext(
+        await ensureQaTestEnvironment(taskId, projectRoot),
+      );
+    } catch (error) {
+      if (error instanceof TestbenchLifecycleError) {
+        setTaskFields(taskId, {
+          qaVerdict: "blocked",
+          updatedAt: new Date().toISOString(),
+        });
+        throw new StageManualBlockError(error.message, error.code);
+      }
+      throw error;
+    }
+  }
   const verifySlashCommand = "/aif-verify";
   const scopeConstraint = `IMPORTANT: Your working directory is ${projectRoot}
 All file reads, searches, and verification commands must stay within this directory. Do NOT navigate to parent directories or other projects.`;
@@ -151,6 +173,9 @@ QA task contract:
 - Return execution_status=completed and qa_verdict=fail when testing completed and defects were found.
 - Return execution_status=blocked only when the requested testing itself could not be completed.
 - Return execution_status=error only for an internal test/tool failure.
+- Pass HANDOFF_TASK_ID as task_id to every testbench_prepare call. The controller reuses the environment owned by this task for the exact revision; do not invent a new task_id.
+- Reuse the environment returned by testbench_prepare. CAPACITY_BUSY is only a blocker when the active environment belongs to another task or revision.
+- Save every Playwright screenshot and trace under the browser_evidence_path returned by Testbench access. testbench_collect_evidence discovers that directory automatically.
 - Never claim a screenshot, trace, log, or report path unless that file exists and was verified.
 - The final aif-gate-result JSON must include execution_status and qa_verdict.`
       : "";
@@ -162,6 +187,7 @@ Autonomous Handoff mode: true.
 Do not ask interactive questions.
 If verification finds issues, report them in the final aif-gate-result block and stop.
 ${qaContract}
+${qaTestEnvironmentContext}
 
 ${scopeConstraint}
 

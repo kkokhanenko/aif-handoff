@@ -22,6 +22,11 @@ import { computePendingPlanLayers, computePlanLayers } from "../planLayers.js";
 import { assertCurrentBranch, restorePersistedBranch } from "../gitBranch.js";
 import { materializeProjectTestCredentialContext } from "../projectTestCredentialContext.js";
 import { StageManualBlockError } from "../stageErrorHandler.js";
+import {
+  ensureQaTestEnvironment,
+  formatQaTestEnvironmentContext,
+  TestbenchLifecycleError,
+} from "../testbenchLifecycle.js";
 
 const log = logger("implementer");
 const AGENT_NAME = "implement-coordinator";
@@ -258,6 +263,20 @@ export async function runImplementer(taskId: string, projectRoot: string): Promi
 
   log.info({ taskId, title: task.title, useSubagents }, "Starting implementation stage");
 
+  let qaTestEnvironmentContext = "";
+  if (task.taskKind === "qa") {
+    try {
+      qaTestEnvironmentContext = formatQaTestEnvironmentContext(
+        await ensureQaTestEnvironment(taskId, projectRoot),
+      );
+    } catch (error) {
+      if (error instanceof TestbenchLifecycleError) {
+        throw new StageManualBlockError(error.message, error.code);
+      }
+      throw error;
+    }
+  }
+
   const scopeConstraint = `IMPORTANT: Your working directory is ${projectRoot}
 All files must be created and modified inside this directory. Do NOT create files outside of it.`;
   const implementSlashCommand = `/aif-implement ${planSection}`;
@@ -333,6 +352,7 @@ Do not perform Handoff MCP sync yourself.
 
 ${scopeConstraint}
 ${credentialContext.prompt}
+${qaTestEnvironmentContext}
 
 ${bodyReworkHeader}Latest executor responsibility: ${handoffResponsibility}
 
@@ -350,7 +370,7 @@ Execution rules:
 - Respect task dependencies and checklist state from the plan file.
 - Keep plan checklist state accurate while implementing.
 - ${task.taskKind === "qa" ? "This is QA-only: do not modify product source code, dependencies, or product documentation; only the plan checklist and task-scoped QA artifacts may change." : "Implement the requested product change within the task scope."}
-- ${task.taskKind === "qa" ? "Pass HANDOFF_TASK_ID as task_id to testbench_prepare and never list evidence paths unless those files exist." : "Keep generated artifacts scoped to this task."}
+- ${task.taskKind === "qa" ? "Pass HANDOFF_TASK_ID as task_id to every testbench_prepare call. Reuse the returned environment for the exact revision. Save Playwright screenshots and trace only under the browser_evidence_path returned by Testbench; testbench_collect_evidence imports that directory automatically. Never list evidence paths unless those files exist." : "Keep generated artifacts scoped to this task."}
 - Run tests/lint/verification relevant to the changes.
 - IMPORTANT: The plan file is ${effectivePlanPath}. Always read from and annotate this exact file — do not create plan files at other paths.${reworkProtocolBlock}`;
   const workflowSpec = createRuntimeWorkflowSpec({

@@ -128,6 +128,9 @@ describe("runVerifier", () => {
     });
 
     await expect(runVerifier("task-qa-fail", "/tmp/verifier-test")).resolves.toBeUndefined();
+    const call = executeSubagentQueryMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(call.prompt).toContain("task_id to every testbench_prepare call");
+    expect(call.prompt).toContain("browser_evidence_path returned by Testbench access");
     const updated = testDb.current.select().from(tasks).where(eq(tasks.id, "task-qa-fail")).get();
     expect(updated?.qaVerdict).toBe("fail");
     expect(logActivityMock).toHaveBeenCalledWith(
