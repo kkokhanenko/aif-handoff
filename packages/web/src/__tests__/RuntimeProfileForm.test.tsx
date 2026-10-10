@@ -239,6 +239,50 @@ describe("RuntimeProfileForm", () => {
     expect(screen.getByRole("option", { name: "XHIGH" })).toBeInTheDocument();
   });
 
+  it("uses Pi effort options and stores modelReasoningEffort", async () => {
+    mockRuntimeModels.mutateAsync.mockResolvedValue({
+      models: [{ id: "gpt-6.1-sol", label: "GPT-6.1 Sol" }],
+      profile: {},
+    });
+    const onSubmit = vi.fn();
+
+    render(
+      <RuntimeProfileForm
+        mode="create"
+        projectId={null}
+        runtimes={[
+          createRuntimeDescriptor({
+            id: "pi",
+            providerId: "openai-codex",
+            displayName: "Pi",
+            defaultTransport: "cli",
+            defaultModelPlaceholder: "gpt-6.1-sol",
+            supportedTransports: ["cli"],
+          }),
+        ]}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByDisplayValue("gpt-6.1-sol")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /runtime default/i }));
+    expect(screen.getByRole("option", { name: "OFF" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "MAX" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("option", { name: "MAX" }));
+    fireEvent.click(screen.getByRole("button", { name: /create profile/i }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtimeId: "pi",
+        providerId: "openai-codex",
+        transport: "cli",
+        defaultModel: "gpt-6.1-sol",
+        options: { modelReasoningEffort: "max" },
+      }),
+    );
+  });
+
   it("hides effort when the selected model explicitly does not support it", async () => {
     mockRuntimeModels.mutateAsync.mockResolvedValue({
       models: [

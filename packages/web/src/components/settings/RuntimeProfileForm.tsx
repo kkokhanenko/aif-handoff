@@ -72,7 +72,7 @@ function getEffortOptionKey(
   runtimeId: string,
 ): "effort" | "modelReasoningEffort" | "reasoningEffort" | null {
   if (runtimeId === "claude") return "effort";
-  if (runtimeId === "codex") return "modelReasoningEffort";
+  if (runtimeId === "codex" || runtimeId === "pi") return "modelReasoningEffort";
   if (runtimeId === "openrouter") return "effort";
   if (runtimeId === "opencode") return "reasoningEffort";
   return null;
@@ -81,6 +81,7 @@ function getEffortOptionKey(
 function getDefaultEffortLevels(runtimeId: string): string[] {
   if (runtimeId === "claude") return ["low", "medium", "high", "max"];
   if (runtimeId === "codex") return ["minimal", "low", "medium", "high", "xhigh"];
+  if (runtimeId === "pi") return ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
   if (runtimeId === "openrouter") return ["minimal", "low", "medium", "high", "xhigh"];
   if (runtimeId === "opencode") return ["none", "minimal", "low", "medium", "high", "xhigh"];
   return [];

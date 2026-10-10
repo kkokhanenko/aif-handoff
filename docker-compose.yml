@@ -10,6 +10,7 @@ services:
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
         CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+        PI_VERSION: ${PI_VERSION:-1.1.0}
     ports:
       - "${PORT:-3009}:3009"
     env_file: .env
@@ -26,6 +27,7 @@ services:
       - ${PROJECTS_DIR:-${PWD}/projects}:${PROJECTS_MOUNT:-/home/www}
       - claude-auth:/home/node/.claude
       - codex-auth:/home/node/.codex
+      - pi-auth:/home/node/.pi
     restart: unless-stopped
 
   web:
@@ -39,6 +41,7 @@ services:
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
         CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+        PI_VERSION: ${PI_VERSION:-1.1.0}
     ports:
       - "${WEB_PORT:-5180}:80"
     depends_on:
@@ -56,6 +59,7 @@ services:
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
         CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+        PI_VERSION: ${PI_VERSION:-1.1.0}
     env_file: .env
     environment:
       - DATABASE_URL=/data/aif.sqlite
@@ -74,6 +78,7 @@ services:
       - ${PROJECTS_DIR:-${PWD}/projects}:${PROJECTS_MOUNT:-/home/www}
       - claude-auth:/home/node/.claude
       - codex-auth:/home/node/.codex
+      - pi-auth:/home/node/.pi
     depends_on:
       - api
     restart: unless-stopped
@@ -89,6 +94,7 @@ services:
         ALL_PROXY: ${ALL_PROXY:-}
         NO_PROXY: ${NO_PROXY:-}
         CODEX_VERSION: ${CODEX_VERSION:-0.145.0}
+        PI_VERSION: ${PI_VERSION:-1.1.0}
     ports:
       - "${MCP_PORT:-3100}:3100"
     env_file: .env
@@ -110,3 +116,4 @@ volumes:
   db-data:
   claude-auth:
   codex-auth:
+  pi-auth:

@@ -65,6 +65,11 @@ describe("Timeout coverage guard", () => {
       expect(hasAnyPattern(cli, PROCESS_TIMEOUT_PATTERNS)).toBe(true);
     });
 
+    it("Pi CLI (cli.ts)", () => {
+      const cli = readAdapterSource("pi/cli.ts");
+      expect(hasAnyPattern(cli, PROCESS_TIMEOUT_PATTERNS)).toBe(true);
+    });
+
     it("Codex app-server (appServer/run.ts)", () => {
       const appServerRun = readAdapterSource("codex/appServer/run.ts");
       expect(hasAnyPattern(appServerRun, PROCESS_TIMEOUT_PATTERNS)).toBe(true);
@@ -100,6 +105,7 @@ describe("Timeout coverage guard", () => {
       "Claude CLI": ["claude/cli.ts"],
       "Codex SDK": ["codex/sdk.ts"],
       "Codex CLI": ["codex/cli.ts"],
+      "Pi CLI": ["pi/cli.ts"],
       "Codex app-server": ["codex/appServer/run.ts"],
       "Codex API": ["codex/api.ts"],
       "OpenRouter API": ["openrouter/api.ts"],

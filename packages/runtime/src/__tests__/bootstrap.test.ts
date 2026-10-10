@@ -11,7 +11,7 @@ describe("bootstrapRuntimeRegistry", () => {
     resetEnvCache();
   });
 
-  it("creates registry with built-in claude, codex, opencode, and openrouter adapters", async () => {
+  it("creates registry with built-in claude, codex, opencode, openrouter, and pi adapters", async () => {
     const registry = await bootstrapRuntimeRegistry();
     const runtimes = registry.listRuntimes();
 
@@ -20,6 +20,7 @@ describe("bootstrapRuntimeRegistry", () => {
     expect(runtimes.find((r) => r.id === "codex")).toBeDefined();
     expect(runtimes.find((r) => r.id === "opencode")).toBeDefined();
     expect(runtimes.find((r) => r.id === "openrouter")).toBeDefined();
+    expect(runtimes.find((r) => r.id === "pi")).toBeDefined();
   });
 
   it("claude adapter has expected capabilities", async () => {
@@ -67,6 +68,18 @@ describe("bootstrapRuntimeRegistry", () => {
     expect(openrouter.descriptor.capabilities.supportsCustomEndpoint).toBe(true);
     expect(openrouter.descriptor.defaultTransport).toBe("api");
     expect(openrouter.descriptor.lightModel).toBeNull();
+  });
+
+  it("pi adapter has expected capabilities", async () => {
+    const registry = await bootstrapRuntimeRegistry();
+    const pi = registry.resolveRuntime("pi");
+
+    expect(pi.descriptor.defaultTransport).toBe("cli");
+    expect(pi.descriptor.capabilities.supportsResume).toBe(true);
+    expect(pi.descriptor.capabilities.supportsStreaming).toBe(true);
+    expect(pi.descriptor.capabilities.supportsModelDiscovery).toBe(true);
+    expect(pi.descriptor.capabilities.supportsIsolatedSubagentWorkflows).toBe(true);
+    expect(pi.descriptor.capabilities.usageReporting).toBe(UsageReporting.FULL);
   });
 
   it("passes logger to registry", async () => {

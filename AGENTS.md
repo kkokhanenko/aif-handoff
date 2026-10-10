@@ -14,7 +14,7 @@ Autonomous task management system with Kanban board and AI subagents. Tasks flow
 - **Runtime Abstraction:** `@aif/runtime` workspace (runtime/provider contracts + registry)
 - **Database:** SQLite (better-sqlite3 + drizzle-orm)
 - **Frontend:** React 19 + Vite + TailwindCSS 4
-- **Runtime:** Pluggable adapter system (`@aif/runtime`) — built-in Claude (Agent SDK) + Codex (SDK/CLI/API) + OpenRouter (API) adapters
+- **Runtime:** Pluggable adapter system (`@aif/runtime`) — built-in Claude, Codex, Pi, OpenCode, and OpenRouter adapters
 - **Agent:** Runtime-neutral coordinator + node-cron
 - **Testing:** Vitest
 
@@ -52,7 +52,8 @@ packages/
 │           ├── TEMPLATE.ts      # Adapter development guide + skeleton
 │           ├── claude/          # Claude adapter (Agent SDK transport)
 │           ├── codex/           # Codex adapter (CLI + API transports)
-│           └── openrouter/      # OpenRouter adapter (API transport)
+│           ├── openrouter/      # OpenRouter adapter (API transport)
+│           └── pi/              # Pi adapter (subscription-backed CLI transport)
 ├── data/                # @aif/data — centralized data-access layer
 │   └── src/
 │       ├── participants.ts  # Participant lifecycle and admin invariants

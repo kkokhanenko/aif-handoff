@@ -2,6 +2,15 @@ import type { RuntimeModel, RuntimeRunInput } from "./types.js";
 
 export const CLAUDE_MODEL_EFFORT_LEVELS = ["low", "medium", "high", "max"] as const;
 export const CODEX_MODEL_EFFORT_LEVELS = ["minimal", "low", "medium", "high", "xhigh"] as const;
+export const PI_MODEL_EFFORT_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
 export const OPENCODE_MODEL_EFFORT_LEVELS = [
   "none",
   "minimal",
@@ -61,6 +70,13 @@ const MODEL_EFFORT_CONFIGS = new Map<string, RuntimeModelEffortConfig>([
     {
       optionKey: "modelReasoningEffort",
       fallbackLevels: CODEX_MODEL_EFFORT_LEVELS,
+    },
+  ],
+  [
+    "pi",
+    {
+      optionKey: "modelReasoningEffort",
+      fallbackLevels: PI_MODEL_EFFORT_LEVELS,
     },
   ],
   [

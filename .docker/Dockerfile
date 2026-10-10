@@ -25,6 +25,10 @@ FROM base AS codex
 ARG CODEX_VERSION=0.145.0
 RUN npm install --prefix /opt/codex --ignore-scripts --no-save --package-lock=false "@openai/codex-sdk@${CODEX_VERSION}"
 
+FROM base AS pi
+ARG PI_VERSION=1.1.0
+RUN npm install --prefix /opt/pi --ignore-scripts --no-save --package-lock=false "@earendil-works/pi-coding-agent@${PI_VERSION}"
+
 # ---- Dependencies ----
 FROM base AS deps
 COPY package.json package-lock.json turbo.json ./
@@ -63,7 +67,8 @@ FROM base AS api
 ENV NODE_ENV=production \
     HOME=/home/node \
     CODEX_CLI_PATH=/app/node_modules/.bin/codex \
-    PATH=/app/node_modules/.bin:${PATH}
+    PI_CLI_PATH=/opt/pi/node_modules/.bin/pi \
+    PATH=/opt/pi/node_modules/.bin:/app/node_modules/.bin:${PATH}
 # Claude Code CLI. NOTE: the SDK transport does NOT spawn this — `@anthropic-ai/
 # claude-agent-sdk` (pinned in package.json, currently bundling Claude Code
 # 2.1.220 via its per-platform native binary) launches its own bundled binary,
@@ -77,6 +82,7 @@ ARG CLAUDE_CODE_VERSION=2.1.220
 RUN apt-install ca-certificates gosu git \
     && npm i -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=pi /opt/pi /opt/pi
 COPY --chown=node:node --from=build /app/packages/shared ./packages/shared
 COPY --chown=node:node --from=build /app/packages/data ./packages/data
 COPY --chown=node:node --from=build /app/packages/runtime ./packages/runtime
@@ -114,7 +120,8 @@ FROM base AS agent
 ENV NODE_ENV=production \
     HOME=/home/node \
     CODEX_CLI_PATH=/app/node_modules/.bin/codex \
-    PATH=/app/node_modules/.bin:${PATH}
+    PI_CLI_PATH=/opt/pi/node_modules/.bin/pi \
+    PATH=/opt/pi/node_modules/.bin:/app/node_modules/.bin:${PATH}
 # jq / python3 / gh back the consumer repo's edit-time and commit-time gates that run
 # inside this container: jq parses the hook stdin payload (nearly every PostToolUse hook
 # shells out to it), python3 backs the pre-commit JSON + YAML validity checks, and gh
@@ -127,6 +134,7 @@ ARG CLAUDE_CODE_VERSION=2.1.220
 RUN apt-install ca-certificates gosu git curl jq python3 gh \
     && npm i -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
+COPY --chown=node:node --from=pi /opt/pi /opt/pi
 COPY --chown=node:node --from=build /app/packages/shared ./packages/shared
 COPY --chown=node:node --from=build /app/packages/data ./packages/data
 COPY --chown=node:node --from=build /app/packages/runtime ./packages/runtime

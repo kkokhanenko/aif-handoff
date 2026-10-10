@@ -59,13 +59,14 @@ The API exposes effective selection endpoints:
 
 ## Supported Runtimes
 
-| Runtime      | Provider     | Transports                | Resume                   | Session Fork     | Sessions             | Agent Defs    | Native Subagents | Isolated Fallback | Usage Reporting                          | Light Model         | Status                    |
-| ------------ | ------------ | ------------------------- | ------------------------ | ---------------- | -------------------- | ------------- | ---------------- | ----------------- | ---------------------------------------- | ------------------- | ------------------------- |
-| `claude`     | `anthropic`  | SDK, CLI, API             | Yes (SDK/CLI)            | Yes (SDK/CLI)    | Yes (SDK/CLI)        | Yes (SDK/CLI) | No               | No                | `FULL` (all transports)                  | `claude-haiku-3-5`  | Built-in                  |
-| `codex`      | `openai`     | SDK, CLI, App Server, API | Yes (SDK/CLI/App Server) | Yes (App Server) | Yes (SDK/App Server) | No            | SDK only         | SDK only          | `FULL` SDK/API, `PARTIAL` CLI/App Server | default             | Built-in                  |
-| `opencode`   | `opencode`   | API                       | Yes                      | No               | Yes                  | No            | No               | No                | `NONE`                                   | null (configurable) | Built-in                  |
-| `openrouter` | `openrouter` | API                       | No                       | No               | No                   | No            | No               | No                | `FULL`                                   | null (configurable) | Built-in                  |
-| Custom       | Any          | Any                       | Configurable             | Configurable     | Configurable         | Configurable  | Configurable     | Configurable      | Must declare                             | Configurable        | Via `AIF_RUNTIME_MODULES` |
+| Runtime      | Provider       | Transports                | Resume                   | Session Fork     | Sessions             | Agent Defs    | Native Subagents | Isolated Fallback | Usage Reporting                          | Light Model         | Status                    |
+| ------------ | -------------- | ------------------------- | ------------------------ | ---------------- | -------------------- | ------------- | ---------------- | ----------------- | ---------------------------------------- | ------------------- | ------------------------- |
+| `claude`     | `anthropic`    | SDK, CLI, API             | Yes (SDK/CLI)            | Yes (SDK/CLI)    | Yes (SDK/CLI)        | Yes (SDK/CLI) | No               | No                | `FULL` (all transports)                  | `claude-haiku-3-5`  | Built-in                  |
+| `codex`      | `openai`       | SDK, CLI, App Server, API | Yes (SDK/CLI/App Server) | Yes (App Server) | Yes (SDK/App Server) | No            | SDK only         | SDK only          | `FULL` SDK/API, `PARTIAL` CLI/App Server | default             | Built-in                  |
+| `opencode`   | `opencode`     | API                       | Yes                      | No               | Yes                  | No            | No               | No                | `NONE`                                   | null (configurable) | Built-in                  |
+| `openrouter` | `openrouter`   | API                       | No                       | No               | No                   | No            | No               | No                | `FULL`                                   | null (configurable) | Built-in                  |
+| `pi`         | `openai-codex` | CLI                       | Yes                      | No               | No                   | No            | No               | Yes               | `FULL`                                   | `gpt-6-luna`        | Built-in                  |
+| Custom       | Any            | Any                       | Configurable             | Configurable     | Configurable         | Configurable  | Configurable     | Configurable      | Must declare                             | Configurable        | Via `AIF_RUNTIME_MODULES` |
 
 Capabilities are **transport-aware**: the same adapter may expose different capabilities depending on the selected transport. For example, Codex supports resume on SDK/CLI/App Server, session fork only on App Server, and session discovery on SDK/App Server. Use `resolveAdapterCapabilities(adapter, transport)` to get the effective set.
 
@@ -79,6 +80,7 @@ Reasoning effort is model metadata, not a runtime-wide enum. The profile form re
 | Codex      | App Server `model/list` reasoning efforts    | `modelReasoningEffort` |
 | OpenCode   | Provider model `variants[*].reasoningEffort` | `reasoningEffort`      |
 | OpenRouter | `/models` `reasoning.supported_efforts`      | `effort`               |
+| Pi         | `pi --offline --list-models openai-codex`    | `modelReasoningEffort` |
 
 The rollout is controlled by `AIF_RUNTIME_MODEL_EFFORT_DISCOVERY_ENABLED=false`. While disabled, the profile form and execution paths keep the stable runtime-specific allowlists. When enabled, adapters normalize and deduplicate provider-advertised values, a model with `supportsEffort: false` hides the control, and execution validates the persisted value against cached metadata for the selected model. If metadata is unavailable, execution retains the runtime-specific fallback allowlist. Stale or unsupported profile values are ignored with a structured warning before any provider request is built.
 
@@ -524,6 +526,45 @@ Permission handling:
 - OpenCode permissions live in the server-side `opencode.json` config (per-agent `permission` map resolving to `"allow"` / `"ask"` / `"deny"`). The default `build` agent is effectively permissive (`"*": "allow"` with a few exceptions).
 - When `AGENT_BYPASS_PERMISSIONS=true`, the adapter forces `agent: "build"` in the message body so a user-configured restrictive `default_agent` (e.g. `plan`) cannot block edits.
 - Per-tool `"ask"` rules (e.g. reading `.env*`, writing outside the worktree) are still enforced server-side. If a session hits an `"ask"` rule, OpenCode emits a permission event over `/event` SSE that no-one answers, and the `/session/:id/message` POST will hang until `runTimeoutMs`. For full parity with Claude's `--dangerously-skip-permissions`, set `"permission": "allow"` in `opencode.json`.
+
+### Pi (CLI, OpenAI subscription)
+
+The Pi adapter runs the `pi` coding-agent CLI in JSONL mode and uses its
+`openai-codex` OAuth provider. This makes subscription-backed models available
+without configuring an OpenAI API key. Pi authentication is stored separately
+from Codex authentication under `~/.pi/agent/auth.json`; Docker deployments
+persist that directory in the private `pi-auth` named volume.
+
+```json
+{
+  "name": "Pi — GPT-6.1 Sol",
+  "runtimeId": "pi",
+  "providerId": "openai-codex",
+  "transport": "cli",
+  "defaultModel": "gpt-6.1-sol",
+  "options": {
+    "piProvider": "openai-codex",
+    "modelReasoningEffort": "medium"
+  }
+}
+```
+
+Pi-specific options:
+
+- `piCliPath` — executable override; otherwise `PI_CLI_PATH` or `pi` from `PATH`.
+- `piProvider` — Pi provider id; defaults to `openai-codex`.
+- `modelReasoningEffort` — `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
+
+The adapter discovers AI Factory skills from project `.agents/skills`,
+`.claude/skills`, and `.codex/skills`, then translates `/aif-*` workflow
+commands to Pi's `/skill:aif-*` syntax. It persists Pi sessions and supports
+AIF resume semantics. At Pi 1.1.0 the catalog contains `gpt-6.1-sol` and
+`gpt-6-luna`; there is no model id named `gpt-6.1-luna`.
+
+To authenticate a headless Docker deployment, either sign in interactively
+with `/login openai-codex` inside Pi or securely provision an existing private
+`auth.json` into the `pi-auth` volume. Never put that file in Git, SQLite, or
+an environment variable.
 
 ## Capability Gates
 

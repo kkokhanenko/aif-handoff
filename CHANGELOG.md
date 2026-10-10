@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 
 ### Added
 
+- Built-in Pi CLI runtime with OpenAI Codex subscription authentication,
+  model discovery, resumable sessions, usage/tool event mapping, and pinned
+  Docker packaging.
 - **Per-project parallel task execution** — coordinator processes multiple tasks concurrently for projects with "Parallel Execution" enabled; non-parallel projects unchanged (1 task at a time)
 - Lease-based task claiming with `lockedBy`/`lockedUntil` columns and atomic UPDATE pattern
 - Cross-project coordinator lanes with independent project and per-project task caps

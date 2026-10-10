@@ -32,6 +32,7 @@ describe("runtime model effort policy", () => {
   it.each([
     { runtimeId: "claude", optionKey: "effort", accepted: "max" },
     { runtimeId: "codex", optionKey: "modelReasoningEffort", accepted: "xhigh" },
+    { runtimeId: "pi", optionKey: "modelReasoningEffort", accepted: "max" },
     { runtimeId: "opencode", optionKey: "reasoningEffort", accepted: "none" },
     { runtimeId: "openrouter", optionKey: "effort", accepted: "high" },
   ])("retains the $runtimeId fallback allowlist", ({ runtimeId, optionKey, accepted }) => {
@@ -64,6 +65,7 @@ describe("runtime model effort policy", () => {
   it.each([
     { runtimeId: "claude", optionKey: "effort" },
     { runtimeId: "codex", optionKey: "modelReasoningEffort" },
+    { runtimeId: "pi", optionKey: "modelReasoningEffort" },
     { runtimeId: "opencode", optionKey: "reasoningEffort" },
     { runtimeId: "openrouter", optionKey: "effort" },
   ])(
