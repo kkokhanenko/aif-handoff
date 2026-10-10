@@ -555,6 +555,14 @@ Pi-specific options:
 - `piProvider` — Pi provider id; defaults to `openai-codex`.
 - `modelReasoningEffort` — `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`.
 
+The adapter also manages Pi's native MCP registry at
+`$PI_CODING_AGENT_DIR/mcp.json` (or `~/.pi/agent/mcp.json`). MCP servers
+installed through AIF are written in Pi's `mcpServers` format and exposed
+directly to the model. This allows subscription-backed Pi profiles to use the
+same configured browser and project tooling as other MCP-capable runtimes.
+The registry is stored alongside Pi authentication in the private `pi-auth`
+volume in Docker deployments; neither file belongs in a project repository.
+
 The adapter discovers AI Factory skills from project `.agents/skills`,
 `.claude/skills`, and `.codex/skills`, then translates `/aif-*` workflow
 commands to Pi's `/skill:aif-*` syntax. It persists Pi sessions and supports

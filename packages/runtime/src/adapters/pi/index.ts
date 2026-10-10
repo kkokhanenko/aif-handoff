@@ -14,6 +14,7 @@ import {
   validatePiAuth,
   type PiCliLogger,
 } from "./cli.js";
+import { getPiMcpStatus, installPiMcpServer, uninstallPiMcpServer } from "./mcp.js";
 
 const PI_CAPABILITIES: RuntimeCapabilities = {
   supportsResume: true,
@@ -136,6 +137,18 @@ export function createPiRuntimeAdapter(
 
     async diagnoseError(input) {
       return classifyPiRuntimeError(input.error).message;
+    },
+
+    async getMcpStatus(input) {
+      return getPiMcpStatus(input);
+    },
+
+    async installMcpServer(input) {
+      return installPiMcpServer(input);
+    },
+
+    async uninstallMcpServer(input) {
+      return uninstallPiMcpServer(input);
     },
   };
 }
